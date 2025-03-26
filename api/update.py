@@ -4,10 +4,8 @@ import requests
 
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
-        # Example: Real DeFi token prices
         prices = {}
 
-        # Tokens you care about
         tokens = {
             'ethena': 'ethena-usde',
             'pendle': 'pendle',
@@ -17,13 +15,20 @@ class handler(BaseHTTPRequestHandler):
         }
 
         for key, coingecko_id in tokens.items():
-            url = f'https://api.coingecko.com/api/v3/simple/price?ids={coingecko_id}&vs_currencies=gbp'
-            res = requests.get(url)
-            prices[key] = res.json()[coingecko_id]['gbp']
+            try:
+                url = f'https://api.coingecko.com/api/v3/simple/price?ids={coingecko_id}&vs_currencies=gbp'
+                res = requests.get(url, timeout=5)
+                data = res.json()
+                if coingecko_id in data and 'gbp' in data[coingecko_id]:
+                    prices[key] = data[coingecko_id]['gbp']
+                else:
+                    prices[key] = 'Unavailable'
+            except Exception as e:
+                prices[key] = f"Error: {str(e)}"
 
-        # Example portfolio calc
-        stablecoin_value = 5000 * (1 + 0.055)  # 5.5% gain
-        heavens_vault_value = 5000 * (1 + 0.09)  # 9% gain
+        # Simulated values
+        stablecoin_value = 5000 * (1 + 0.055)
+        heavens_vault_value = 5000 * (1 + 0.09)
 
         response = {
             "Stablecoin Strategy": f"£{stablecoin_value:.2f}",
