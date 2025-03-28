@@ -26,7 +26,7 @@
   </div>
 
   <div class="vault">
-    <h2>Heaven's Vault Portfolio</h2>
+    <h2>heaven's Vault Portfolio</h2>
     <div id="heaven-total"></div>
     <div id="heaven-gain" class="gain"></div>
     <div id="heaven-tokens"></div>
@@ -40,7 +40,7 @@
         const res = await fetch('/api/update');
         const data = await res.json();
 
-        if (!data?.stablecoin?.tokens || !data?.Heaven?.tokens) {
+        if (!data?.stablecoin?.tokens || !data?.heaven?.tokens) {
           console.warn("Skipping update — malformed data");
           return;
         }
@@ -63,9 +63,9 @@
       updateGain("stable-gain", data.stablecoin.gain);
       renderTokens("stable-tokens", data.stablecoin.tokens);
 
-      document.getElementById("heaven-total").textContent = `Total Value: ${data.Heaven.total}`;
-      updateGain("heaven-gain", data.Heaven.gain);
-      renderTokens("heaven-tokens", data.Heaven.tokens);
+      document.getElementById("heaven-total").textContent = `Total Value: ${data.heaven.total}`;
+      updateGain("heaven-gain", data.heaven.gain);
+      renderTokens("heaven-tokens", data.heaven.tokens);
     }
 
     function updateGain(id, gainStr) {
