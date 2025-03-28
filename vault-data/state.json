@@ -1,5 +1,5 @@
 {
-  "Stablecoin": {
+  "stablecoin": {
     "initial": 5000,
     "allocations": {
       "usde": 1293.03,
