@@ -1,77 +1,112 @@
-from http.server import BaseHTTPRequestHandler
-import json, requests, base64, os
+import json
+import os
+import base64
+import requests
 from datetime import datetime
 
-TOKEN = os.getenv("GH_TOKEN")
-REPO = "xak1234/defi-vault-bot"
-STATE_FILE = "vault-data/state.json"
-HEADERS = {"Authorization": f"token {TOKEN}"}
+# GitHub storage
+GH_REPO = "xak1234/defi-vault-bot"
+GH_FILE = "vault-data/state.json"
+GH_TOKEN = os.getenv("GH_TOKEN")
+HEADERS = {
+    "Authorization": f"Bearer {GH_TOKEN}",
+    "Accept": "application/vnd.github+json"
+}
 
-def fetch_prices(ids):
-    ids_joined = ",".join(ids)
-    url = f"https://api.coingecko.com/api/v3/simple/price?ids={ids_joined}&vs_currencies=gbp"
-    return requests.get(url).json()
-
-def load_state():
-    r = requests.get(f"https://api.github.com/repos/{REPO}/contents/{STATE_FILE}", headers=HEADERS)
+def read_state():
+    url = f"https://api.github.com/repos/{GH_REPO}/contents/{GH_FILE}"
+    r = requests.get(url, headers=HEADERS)
     if r.status_code == 200:
-        content = base64.b64decode(r.json()["content"]).decode()
-        sha = r.json()["sha"]
-        return json.loads(content), sha
-    return {"Stablecoin": {}, "Heaven": {}}, None
+        content = base64.b64decode(r.json()['content']).decode()
+        return json.loads(content)
+    return None
 
-def save_state(state, sha):
-    body = {
-        "message": "Update state",
-        "content": base64.b64encode(json.dumps(state).encode()).decode(),
+def write_state(data):
+    url = f"https://api.github.com/repos/{GH_REPO}/contents/{GH_FILE}"
+    get = requests.get(url, headers=HEADERS)
+    sha = get.json()['sha']
+    content = base64.b64encode(json.dumps(data).encode()).decode()
+
+    payload = {
+        "message": "Update vault state",
+        "content": content,
         "sha": sha
     }
-    requests.put(f"https://api.github.com/repos/{REPO}/contents/{STATE_FILE}", headers=HEADERS, data=json.dumps(body))
+    r = requests.put(url, headers=HEADERS, data=json.dumps(payload))
+    return r.status_code == 200 or r.status_code == 201
 
-def calculate_portfolio(tokens, prices, holdings, initial_value):
-    total = 0
-    token_data = {}
-    for name in tokens:
-        price = prices[name]['gbp']
-        amount = holdings.get(name, initial_value / len(tokens) / price)
-        token_data[name] = {"price": round(price, 6), "amount": amount}
-        total += amount * price
-    gain = round(((total - initial_value) / initial_value) * 100, 2)
-    return round(total, 2), gain, token_data
+def get_prices(ids):
+    url = f"https://api.coingecko.com/api/v3/simple/price?ids={','.join(ids)}&vs_currencies=gbp"
+    r = requests.get(url)
+    return r.json()
 
-class handler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        stable_tokens = ['usde', 'rai', 'frax', 'alusd', 'lusd']
-        heaven_tokens = ['ethena-usde', 'pendle', 'gmx', 'litentry', 'mantle-staked-ether']
-        prices = fetch_prices(stable_tokens + heaven_tokens)
-        state, sha = load_state()
+def handler(event, context):
+    # Token lists
+    stable_tokens = {
+        'usde': 'ethena-usde',
+        'rai': 'rai',
+        'frax': 'frax',
+        'alusd': 'alchemix-usd',
+        'lusd': 'liquity-usd'
+    }
+    heaven_tokens = {
+        'ethena': 'ethena-usde',
+        'pendle': 'pendle',
+        'gmx': 'gmx',
+        'lit': 'litentry',
+        'meth': 'mantle-staked-ether'
+    }
 
-        if not state.get("Stablecoin"):  # Init holdings
-            state["Stablecoin"] = {k: 5000/len(stable_tokens)/prices[k]['gbp'] for k in stable_tokens}
-        if not state.get("Heaven"):
-            state["Heaven"] = {k: 5000/len(heaven_tokens)/prices[k]['gbp'] for k in heaven_tokens}
-
-        stable_total, stable_gain, stable_data = calculate_portfolio(
-            stable_tokens, prices, state["Stablecoin"], 5000)
-        heaven_total, heaven_gain, heaven_data = calculate_portfolio(
-            heaven_tokens, prices, state["Heaven"], 5000)
-
-        response = {
-            "timestamp": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
-            "Stablecoin": {
-                "total": f"£{stable_total}",
-                "gain": stable_gain,
-                "tokens": stable_data
-            },
-            "Heaven": {
-                "total": f"£{heaven_total}",
-                "gain": heaven_gain,
-                "tokens": heaven_data
-            }
+    try:
+        state = read_state() or {
+            "stable": {k: {"amount": 1000} for k in stable_tokens},
+            "heaven": {k: {"amount": 1000} for k in heaven_tokens}
         }
 
-        save_state(state, sha)
-        self.send_response(200)
-        self.send_header('Content-type','application/json')
-        self.end_headers()
-        self.wfile.write(json.dumps(response).encode())
+        all_ids = list(set(stable_tokens.values()) | set(heaven_tokens.values()))
+        prices = get_prices(all_ids)
+
+        def calculate_total(portfolio, tokens):
+            total = 0
+            token_data = {}
+            for key, token_id in tokens.items():
+                price = prices[token_id]['gbp']
+                amount = state[portfolio][key]['amount']
+                value = amount * price
+                token_data[key] = {
+                    "amount": round(amount, 2),
+                    "price": round(price, 6),
+                    "value": round(value, 2)
+                }
+                total += value
+            return round(total, 2), token_data
+
+        stable_total, stable_data = calculate_total("stable", stable_tokens)
+        heaven_total, heaven_data = calculate_total("heaven", heaven_tokens)
+
+        state["last_updated"] = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+        write_state(state)
+
+        return {
+            "statusCode": 200,
+            "headers": { "Content-Type": "application/json" },
+            "body": json.dumps({
+                "timestamp": state["last_updated"],
+                "Stablecoin": {
+                    "total": f"£{stable_total}",
+                    "gain": "0%",
+                    "tokens": stable_data
+                },
+                "Heaven": {
+                    "total": f"£{heaven_total}",
+                    "gain": "0%",
+                    "tokens": heaven_data
+                }
+            })
+        }
+
+    except Exception as e:
+        return {
+            "statusCode": 500,
+            "body": json.dumps({"error": str(e)})
+        }
