@@ -1,18 +1,21 @@
 from http.server import BaseHTTPRequestHandler
 import json
 import requests
+from datetime import datetime
 
 START_AMOUNT = 5000
 
-stable_tokens = {
+# Working stable tokens with GBP prices
+tokens_stable = {
     'usde': 'ethena-usde',
-    'sdai': 'superstate-sdai',
-    'mimatic': 'mimatic',
-    'musd': 'mstable-usd',
-    'gdai': 'gdai'
+    'rai': 'rai',
+    'frax': 'frax',
+    'alusd': 'alchemix-usd',
+    'lusd': 'liquity-usd'
 }
 
-heaven_tokens = {
+# Heaven vault risky tokens
+tokens_heaven = {
     'ethena': 'ethena-usde',
     'pendle': 'pendle',
     'gmx': 'gmx',
@@ -20,58 +23,66 @@ heaven_tokens = {
     'meth': 'mantle-staked-ether'
 }
 
-# Initial prices at the time of investment (manually set)
-stable_initial = {
-    'usde': 0.76,
-    'sdai': 0.78,
-    'mimatic': 0.79,
-    'musd': 0.82,
-    'gdai': 0.81
+# Store historical values
+price_history = {
+    'stable': [],
+    'heaven': []
 }
 
-heaven_initial = {
-    'ethena': 0.76,
-    'pendle': 2.03,
-    'gmx': 9.89,
-    'lit': 0.38,
-    'meth': 1400.00
-}
+def fetch_live_prices(ids):
+    url = f"https://api.coingecko.com/api/v3/simple/price?ids={','.join(ids)}&vs_currencies=gbp"
+    res = requests.get(url, timeout=10)
+    return res.json()
 
-def calculate_portfolio(tokens, initial_prices, live_data):
-    portfolio = {
-        'total': 0,
-        'tokens': {}
-    }
+def allocate(tokens, prices):
+    portfolio = {}
+    total_value = 0
     split = START_AMOUNT / len(tokens)
-
-    for token, coingecko_id in tokens.items():
-        live_price = live_data.get(coingecko_id, {}).get('gbp', 0)
-        initial_price = initial_prices[token]
-        quantity = split / initial_price
-        value_now = quantity * live_price
-        portfolio['tokens'][token] = {
-            'price': round(live_price, 6),
-            'quantity': round(quantity, 6),
+    for name, coingecko_id in tokens.items():
+        price = prices.get(coingecko_id, {}).get('gbp', 0)
+        if price == 0:
+            continue
+        qty = split / price
+        value_now = qty * price
+        portfolio[name] = {
+            'price': round(price, 6),
+            'quantity': round(qty, 4),
             'value': round(value_now, 2)
         }
-        portfolio['total'] += value_now
-
-    portfolio['total'] = f"£{portfolio['total']:.2f}"
-    gain = ((float(portfolio['total'][1:]) - START_AMOUNT) / START_AMOUNT) * 100
-    portfolio['gain'] = round(gain, 2)
-    return portfolio
+        total_value += value_now
+    return portfolio, round(total_value, 2)
 
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
         try:
-            ids = ','.join(set(list(stable_tokens.values()) + list(heaven_tokens.values())))
-            url = f"https://api.coingecko.com/api/v3/simple/price?ids={ids}&vs_currencies=gbp"
-            r = requests.get(url, timeout=5)
-            live_data = r.json()
+            all_ids = list(set(tokens_stable.values()) | set(tokens_heaven.values()))
+            prices = fetch_live_prices(all_ids)
+
+            stable_holdings, stable_total = allocate(tokens_stable, prices)
+            heaven_holdings, heaven_total = allocate(tokens_heaven, prices)
+
+            timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
+
+            # Save history (limit 30)
+            price_history['stable'].append({'time': timestamp, 'value': round(stable_total, 2)})
+            price_history['stable'] = price_history['stable'][-30:]
+            price_history['heaven'].append({'time': timestamp, 'value': round(heaven_total, 2)})
+            price_history['heaven'] = price_history['heaven'][-30:]
 
             response = {
-                "Stablecoin": calculate_portfolio(stable_tokens, stable_initial, live_data),
-                "Heaven": calculate_portfolio(heaven_tokens, heaven_initial, live_data)
+                "Stablecoin": {
+                    "total": f"£{stable_total:.2f}",
+                    "tokens": {k: {'price': v['price']} for k, v in stable_holdings.items()},
+                    "gain": round(((stable_total - START_AMOUNT) / START_AMOUNT) * 100, 2),
+                    "history": price_history['stable']
+                },
+                "Heaven": {
+                    "total": f"£{heaven_total:.2f}",
+                    "tokens": {k: {'price': v['price']} for k, v in heaven_holdings.items()},
+                    "gain": round(((heaven_total - START_AMOUNT) / START_AMOUNT) * 100, 2),
+                    "history": price_history['heaven']
+                },
+                "timestamp": timestamp
             }
 
             self.send_response(200)
