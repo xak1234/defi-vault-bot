@@ -1,94 +1,79 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
+  <title>Daddy's DeFi Vault</title>
   <meta charset="UTF-8">
-  <title>Daddy's DeFi Vault 💼</title>
   <style>
     body {
-      background-color: #0a0a0a;
-      color: #eaeaea;
-      font-family: 'Segoe UI', sans-serif;
-      max-width: 900px;
-      margin: auto;
-      padding: 2rem;
+      background-color: #111;
+      color: #0f0;
+      font-family: monospace;
+      padding: 20px;
     }
-    h1, h2 {
-      color: #00ffc3;
+    .section {
+      margin-bottom: 2rem;
     }
-    .card {
-      background: #111;
-      border: 1px solid #333;
-      padding: 1rem;
-      border-radius: 8px;
-      margin: 1rem 0;
-      transition: background 0.3s;
+    .title {
+      font-size: 1.5rem;
+      font-weight: bold;
+      margin-bottom: 0.5rem;
     }
-    .gain { color: #00ff8f; }
-    .loss { color: #ff4b4b; }
-    .flash {
-      animation: flashChange 1s ease-in-out;
+    .gain-positive {
+      color: #0f0;
     }
-    @keyframes flashChange {
-      0% { background-color: #333; }
-      50% { background-color: #555; }
-      100% { background-color: #333; }
+    .gain-negative {
+      color: #f00;
     }
   </style>
+  <script>
+    async function loadData() {
+      try {
+        const res = await fetch('http://localhost:8000');
+        const data = await res.json();
+        const out = document.getElementById('output');
+        out.innerHTML = "";
+
+        const formatMoney = v => `£${parseFloat(v).toFixed(2)}`;
+
+        for (const [vaultName, vault] of Object.entries(data)) {
+          if (vaultName === "timestamp") continue;
+
+          const gainClass = vault.gain_amount >= 0 ? "gain-positive" : "gain-negative";
+
+          const section = document.createElement("div");
+          section.className = "section";
+          section.innerHTML = `
+            <div class="title">💼 ${vaultName} Portfolio</div>
+            Initial Investment: ${vault.initial_investment}<br>
+            Current Value: ${vault.current_value}<br>
+            <span class="${gainClass}">
+              Gain/Loss: ${vault.gain_amount >= 0 ? "+" : ""}${formatMoney(vault.gain_amount)} (${vault.gain_percent}%)
+            </span>
+            <br><br>
+            Token Prices:<br>
+            <ul>
+              ${Object.entries(vault.tokens).map(([symbol, info]) =>
+                `<li>${symbol.toUpperCase()}: £${info.price.toFixed(4)}</li>`).join('')}
+            </ul>
+          `;
+          out.appendChild(section);
+        }
+
+        document.getElementById("timestamp").textContent = `📅 Last updated: ${data.timestamp}`;
+
+      } catch (e) {
+        document.getElementById("output").innerHTML = "❌ Failed to load data.";
+        console.error(e);
+      }
+    }
+
+    setInterval(loadData, 60000); // Refresh every 60 seconds
+    window.onload = loadData;
+  </script>
 </head>
 <body>
-  <h1>💼 Daddy's Live DeFi Vault</h1>
-  <p id="timestamp"></p>
-
-  <h2>Stablecoin Portfolio</h2>
-  <div id="stable-output"></div>
-
-  <h2>Heaven's Vault Portfolio</h2>
-  <div id="heaven-output"></div>
-
-  <script>
-    let previousPrices = {};
-
-    async function fetchData() {
-      const res = await fetch('/api/update');
-      const data = await res.json();
-      document.getElementById('timestamp').innerText = `Last updated: ${data.timestamp} UTC`;
-
-      const stableDiv = document.getElementById('stable-output');
-      const heavenDiv = document.getElementById('heaven-output');
-      stableDiv.innerHTML = heavenDiv.innerHTML = '';
-
-      const card = (label, val, id, cls = '') => `<div id="${id}" class="card ${cls}"><strong>${label}</strong><br>£${val}</div>`;
-
-      stableDiv.innerHTML += card('Total Value', data.Stablecoin.total.replace('£',''), 'stable-total');
-      Object.entries(data.Stablecoin.tokens).forEach(([k,v]) => {
-        const pid = `stable-${k}`;
-        stableDiv.innerHTML += card(`${k.toUpperCase()} Price`, v.price, pid);
-        checkFlash(pid, v.price);
-      });
-      stableDiv.innerHTML += card('Stablecoin Gain', data.Stablecoin.gain, 'stable-gain', data.Stablecoin.gain >= 0 ? 'gain' : 'loss');
-
-      heavenDiv.innerHTML += card('Total Value', data.Heaven.total.replace('£',''), 'heaven-total');
-      Object.entries(data.Heaven.tokens).forEach(([k,v]) => {
-        const pid = `heaven-${k}`;
-        heavenDiv.innerHTML += card(`${k.toUpperCase()} Price`, v.price, pid);
-        checkFlash(pid, v.price);
-      });
-      heavenDiv.innerHTML += card("Heaven's Vault Gain", data.Heaven.gain, 'heaven-gain', data.Heaven.gain >= 0 ? 'gain' : 'loss');
-    }
-
-    function checkFlash(id, newVal) {
-      const el = document.getElementById(id);
-      if (!el) return;
-      const prev = previousPrices[id];
-      if (prev && prev !== newVal) {
-        el.classList.add('flash');
-        setTimeout(() => el.classList.remove('flash'), 1000);
-      }
-      previousPrices[id] = newVal;
-    }
-
-    fetchData();
-    setInterval(fetchData, 2000);
-  </script>
+  <h1>🧠 Daddy's Live DeFi Vault</h1>
+  <div id="timestamp">📅 Loading...</div>
+  <div id="output">Fetching data...</div>
 </body>
 </html>
