@@ -1,110 +1,96 @@
-let lastData = null;
+from http.server import BaseHTTPRequestHandler
+import json
+import requests
+from datetime import datetime
 
-async function fetchData() {
-  try {
-    const res = await fetch('vault-data.json');
-    const data = await res.json();
+START_AMOUNT = 5000
 
-    if (!data?.stablecoin?.allocations || !data?.Heaven?.allocations) {
-      console.warn("Skipping update — malformed data");
-      return;
-    }
-
-    lastData = data;
-    renderVault(data);
-    renderChart(generateMockChartData());
-  } catch (e) {
-    console.error("Fetch failed:", e);
-    if (lastData) {
-      console.log("Rendering last known good data");
-      renderVault(lastData);
-      renderChart(generateMockChartData());
-    }
-  }
+# Working stable tokens with GBP prices
+tokens_stable = {
+    'usde': 'ethena-usde',
+    'rai': 'rai',
+    'frax': 'frax',
+    'alusd': 'alchemix-usd',
+    'lusd': 'liquity-usd'
 }
 
-function renderVault(data) {
-  document.getElementById("timestamp").textContent = `Last Updated: ${new Date().toUTCString()}`;
-
-  renderSection("stable", data.stablecoin);
-  renderSection("heaven", data.Heaven);
+# Heaven vault risky tokens
+tokens_heaven = {
+    'ethena': 'ethena-usde',
+    'pendle': 'pendle',
+    'gmx': 'gmx',
+    'lit': 'litentry',
+    'meth': 'mantle-staked-ether'
 }
 
-function renderSection(idPrefix, portfolio) {
-  const tokens = portfolio.allocations;
-  const container = document.getElementById(`${idPrefix}-tokens`);
-  container.innerHTML = '';
-  let total = 0;
-
-  for (const [token, value] of Object.entries(tokens)) {
-    const row = document.createElement("div");
-    row.className = "token-row";
-    row.innerHTML = `<div>${token.toUpperCase()}</div><div>Value: £${value.toFixed(2)}</div>`;
-    container.appendChild(row);
-    total += value;
-  }
-
-  document.getElementById(`${idPrefix}-total`).textContent = `Total Value: £${total.toFixed(2)}`;
-  const gain = total - portfolio.initial;
-  const percent = ((gain / portfolio.initial) * 100).toFixed(2);
-  const gainStr = `${gain >= 0 ? '+' : '-'}£${Math.abs(gain).toFixed(2)} (${percent}%)`;
-  updateGain(`${idPrefix}-gain`, gainStr);
+# Store historical values
+price_history = {
+    'stable': [],
+    'heaven': []
 }
 
-function updateGain(id, gainStr) {
-  const gainEl = document.getElementById(id);
-  gainEl.textContent = `Gain: ${gainStr}`;
-  const gain = parseFloat(gainStr);
-  gainEl.className = 'gain ' + (gain > 0 ? 'positive' : 'negative');
-}
+def fetch_live_prices(ids):
+    url = f"https://api.coingecko.com/api/v3/simple/price?ids={','.join(ids)}&vs_currencies=gbp"
+    res = requests.get(url, timeout=10)
+    return res.json()
 
-function generateMockChartData() {
-  const now = Date.now();
-  const points = [];
-  for (let i = 0; i < 6; i++) {
-    const base = 1800 + Math.random() * 200;
-    const high = base + Math.random() * 20;
-    const low = base - Math.random() * 20;
-    const open = base + Math.random() * 10;
-    const close = base - Math.random() * 10;
-    points.push({
-      x: new Date(now - (5 - i) * 3600000),
-      o: open,
-      h: high,
-      l: low,
-      c: close
-    });
-  }
-  return points;
-}
-
-function renderChart(chartData) {
-  const ctx = document.getElementById("candleChart").getContext("2d");
-  if (window.chartInstance) {
-    window.chartInstance.destroy();
-  }
-  window.chartInstance = new Chart(ctx, {
-    type: 'candlestick',
-    data: {
-      datasets: [{
-        label: 'ETH Price (Mock)',
-        data: chartData,
-        borderColor: '#38bdf8'
-      }]
-    },
-    options: {
-      responsive: true,
-      scales: {
-        x: {
-          type: 'time',
-          time: {
-            unit: 'hour'
-          }
+def allocate(tokens, prices):
+    portfolio = {}
+    total_value = 0
+    split = START_AMOUNT / len(tokens)
+    for name, coingecko_id in tokens.items():
+        price = prices.get(coingecko_id, {}).get('gbp', 0)
+        if price == 0:
+            continue
+        qty = split / price
+        value_now = qty * price
+        portfolio[name] = {
+            'price': round(price, 6),
+            'quantity': round(qty, 4),
+            'value': round(value_now, 2)
         }
-      }
-    }
-  });
-}
+        total_value += value_now
+    return portfolio, round(total_value, 2)
 
-fetchData();
-setInterval(fetchData, 30000);
+class handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        try:
+            all_ids = list(set(tokens_stable.values()) | set(tokens_heaven.values()))
+            prices = fetch_live_prices(all_ids)
+
+            stable_holdings, stable_total = allocate(tokens_stable, prices)
+            heaven_holdings, heaven_total = allocate(tokens_heaven, prices)
+
+            timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
+
+            # Save history (limit 30)
+            price_history['stable'].append({'time': timestamp, 'value': round(stable_total, 2)})
+            price_history['stable'] = price_history['stable'][-30:]
+            price_history['heaven'].append({'time': timestamp, 'value': round(heaven_total, 2)})
+            price_history['heaven'] = price_history['heaven'][-30:]
+
+            response = {
+                "Stablecoin": {
+                    "total": f"£{stable_total:.2f}",
+                    "tokens": {k: {'price': v['price']} for k, v in stable_holdings.items()},
+                    "gain": round(((stable_total - START_AMOUNT) / START_AMOUNT) * 100, 2),
+                    "history": price_history['stable']
+                },
+                "Heaven": {
+                    "total": f"£{heaven_total:.2f}",
+                    "tokens": {k: {'price': v['price']} for k, v in heaven_holdings.items()},
+                    "gain": round(((heaven_total - START_AMOUNT) / START_AMOUNT) * 100, 2),
+                    "history": price_history['heaven']
+                },
+                "timestamp": timestamp
+            }
+
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(response).encode())
+
+        except Exception as e:
+            self.send_response(500)
+            self.end_headers()
+            self.wfile.write(json.dumps({'error': str(e)}).encode())
