@@ -24,13 +24,19 @@ HEAVENS = {
     'meth': 'mantle-staked-ether'
 }
 
-def fetch_prices(coin_dict):
+def fetch_prices():
     try:
-        ids = ','.join(coin_dict.values())
+        combined = {**STABLECOINS, **HEAVENS}
+        ids = ','.join(set(combined.values()))
         url = f"https://api.coingecko.com/api/v3/simple/price?ids={ids}&vs_currencies=gbp"
         r = requests.get(url, timeout=10)
         r.raise_for_status()
-        return r.json()
+        prices = r.json()
+
+        if not prices or any(value == {} for value in prices.values()):
+            raise ValueError("Received empty or partial prices from CoinGecko")
+
+        return prices
     except Exception as e:
         print(f"[Error] Failed to fetch prices: {e}")
         return {}
@@ -42,6 +48,8 @@ def calculate_value(prices, mapping, allocations):
         try:
             price = float(prices.get(coingecko_id, {}).get('gbp', 0))
             amount = float(allocations.get(key, 0))
+            if price == 0:
+                raise ValueError(f"Missing price for {key}")
             values[key] = {"price": round(price, 6), "value": round(price * amount, 2)}
             total += price * amount
         except Exception as e:
@@ -105,12 +113,17 @@ class handler(BaseHTTPRequestHandler):
     def do_GET(self):
         try:
             state = load_state()
+            prices = fetch_prices()
 
-            stable_prices = fetch_prices(STABLECOINS)
-            heaven_prices = fetch_prices(HEAVENS)
+            if not prices:
+                raise ValueError("Skipping update due to missing prices")
 
-            stable_total, stable_values = calculate_value(stable_prices, STABLECOINS, state["Stablecoin"].get("allocations", {}))
-            heaven_total, heaven_values = calculate_value(heaven_prices, HEAVENS, state["Heaven"].get("allocations", {}))
+            stable_total, stable_values = calculate_value(prices, STABLECOINS, state["Stablecoin"].get("allocations", {}))
+            heaven_total, heaven_values = calculate_value(prices, HEAVENS, state["Heaven"].get("allocations", {}))
+
+            # Sanity check before continuing
+            if stable_total < 100 or heaven_total < 100:
+                raise ValueError("Sanity check failed: values too low, likely fetch failure")
 
             stable_gain = round(((stable_total - state["Stablecoin"]["initial"])/state["Stablecoin"]["initial"])*100, 2)
             heaven_gain = round(((heaven_total - state["Heaven"]["initial"])/state["Heaven"]["initial"])*100, 2)
