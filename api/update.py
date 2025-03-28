@@ -38,10 +38,15 @@ def allocate(tokens, prices):
     portfolio = {}
     total_value = 0
     split = START_AMOUNT / len(tokens)
+
     for name, coingecko_id in tokens.items():
-        price = prices.get(coingecko_id, {}).get('gbp', 0)
-        if price == 0:
+        price_data = prices.get(coingecko_id)
+        price = price_data.get('gbp') if price_data else None
+
+        if not isinstance(price, (int, float)) or price <= 0:
+            print(f"⚠️ Warning: Missing or invalid price for {name} ({coingecko_id}). Skipping.")
             continue
+
         qty = split / price
         value_now = qty * price
         portfolio[name] = {
@@ -50,7 +55,11 @@ def allocate(tokens, prices):
             'value': round(value_now, 2)
         }
         total_value += value_now
+
+    if total_value == 0:
+        print("🚨 No valid prices found — possible API failure.")
     return portfolio, round(total_value, 2)
+
 
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
