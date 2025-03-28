@@ -2,10 +2,9 @@ from http.server import BaseHTTPRequestHandler
 import json
 import requests
 
-# Starting capital
 STARTING_BALANCE = 5000
 
-# Coin allocations for Heaven's Vault (split evenly)
+# Tokens and IDs
 vault_tokens = {
     'ethena': 'ethena-usde',
     'pendle': 'pendle',
@@ -14,7 +13,7 @@ vault_tokens = {
     'meth': 'mantle-staked-ether'
 }
 
-# Initial coin prices (to simulate purchase snapshot)
+# Initial token prices at 'investment time'
 initial_prices = {
     'ethena': 0.76,
     'pendle': 2.03,
@@ -23,11 +22,11 @@ initial_prices = {
     'meth': 1400.00
 }
 
-# Lock in how much of each token we “bought” on Day 1 with £5000
-equal_split = STARTING_BALANCE / len(initial_prices)
+# How much of each token we hold in Heaven's Vault
+equal_split = STARTING_BALANCE / len(vault_tokens)
 holdings = {
-    token: equal_split / price
-    for token, price in initial_prices.items()
+    token: equal_split / initial_prices[token]
+    for token in vault_tokens
 }
 
 class handler(BaseHTTPRequestHandler):
@@ -39,30 +38,30 @@ class handler(BaseHTTPRequestHandler):
             live_data = res.json()
 
             prices = {}
-            new_vault_value = 0
+            heaven_value = 0
 
             for token, coingecko_id in vault_tokens.items():
-                live_price = live_data.get(coingecko_id, {}).get('gbp', None)
-                prices[token] = round(live_price, 6) if live_price else "Unavailable"
+                live_price = live_data.get(coingecko_id, {}).get('gbp')
+                if live_price:
+                    prices[token] = round(live_price, 6)
+                    heaven_value += holdings[token] * live_price
+                else:
+                    prices[token] = "Unavailable"
 
-                if isinstance(live_price, (int, float)):
-                    new_vault_value += holdings[token] * live_price
-
-            # Stablecoin vault assumed 1:1 until otherwise stated
-            stablecoin_value = STARTING_BALANCE
+            stablecoin_value = STARTING_BALANCE  # Assume 1:1 backing, no fluctuation
 
             result = {
                 "Stablecoin Strategy": f"£{stablecoin_value:.2f}",
-                "Heaven's Vault": f"£{new_vault_value:.2f}",
+                "Heaven's Vault": f"£{heaven_value:.2f}",
                 "Live Prices (GBP)": prices,
                 "Gains": {
-                    "stable": 0.0,
-                    "heaven": round(((new_vault_value - STARTING_BALANCE) / STARTING_BALANCE) * 100, 2)
+                    "stable": 0.00,
+                    "heaven": round(((heaven_value - STARTING_BALANCE) / STARTING_BALANCE) * 100, 2)
                 }
             }
 
             self.send_response(200)
-            self.send_header('Content-type','application/json')
+            self.send_header('Content-type', 'application/json')
             self.end_headers()
             self.wfile.write(json.dumps(result).encode())
 
