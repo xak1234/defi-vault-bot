@@ -1,100 +1,77 @@
-import os
-import json
-import requests
-from datetime import datetime
 from http.server import BaseHTTPRequestHandler
+import json, requests, base64, os
+from datetime import datetime
 
-# GitHub settings
-github_repo = "xak1234/defi-vault-bot"  # change to your repo
-state_file_path = "vault-data/state.json"  # relative path in your repo
-github_token = os.environ.get("GITHUB_TOKEN")
-headers = {
-    "Authorization": f"Bearer {github_token}",
-    "Accept": "application/vnd.github+json"
-}
+TOKEN = os.getenv("GH_TOKEN")
+REPO = "xak1234/defi-vault-bot"
+STATE_FILE = "vault-data/state.json"
+HEADERS = {"Authorization": f"token {TOKEN}"}
 
-def get_github_state():
-    url = f"https://api.github.com/repos/{github_repo}/contents/{state_file_path}"
-    res = requests.get(url, headers=headers)
-    if res.status_code == 200:
-        content = res.json()
-        sha = content['sha']
-        decoded = json.loads(requests.get(content['download_url']).text)
-        return decoded, sha
-    return {}, None
+def fetch_prices(ids):
+    ids_joined = ",".join(ids)
+    url = f"https://api.coingecko.com/api/v3/simple/price?ids={ids_joined}&vs_currencies=gbp"
+    return requests.get(url).json()
 
-def update_github_state(data, sha):
-    url = f"https://api.github.com/repos/{github_repo}/contents/{state_file_path}"
-    encoded = json.dumps(data, indent=2)
-    payload = {
-        "message": "Update vault state",
-        "content": encoded.encode("utf-8").decode("utf-8"),
-        "sha": sha,
-        "branch": "main"
+def load_state():
+    r = requests.get(f"https://api.github.com/repos/{REPO}/contents/{STATE_FILE}", headers=HEADERS)
+    if r.status_code == 200:
+        content = base64.b64decode(r.json()["content"]).decode()
+        sha = r.json()["sha"]
+        return json.loads(content), sha
+    return {"Stablecoin": {}, "Heaven": {}}, None
+
+def save_state(state, sha):
+    body = {
+        "message": "Update state",
+        "content": base64.b64encode(json.dumps(state).encode()).decode(),
+        "sha": sha
     }
-    return requests.put(url, headers=headers, data=json.dumps(payload))
+    requests.put(f"https://api.github.com/repos/{REPO}/contents/{STATE_FILE}", headers=HEADERS, data=json.dumps(body))
 
-def fetch_price(token_id):
-    r = requests.get(f"https://api.coingecko.com/api/v3/simple/price?ids={token_id}&vs_currencies=gbp")
-    return round(r.json()[token_id]['gbp'], 6)
+def calculate_portfolio(tokens, prices, holdings, initial_value):
+    total = 0
+    token_data = {}
+    for name in tokens:
+        price = prices[name]['gbp']
+        amount = holdings.get(name, initial_value / len(tokens) / price)
+        token_data[name] = {"price": round(price, 6), "amount": amount}
+        total += amount * price
+    gain = round(((total - initial_value) / initial_value) * 100, 2)
+    return round(total, 2), gain, token_data
 
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
-        try:
-            state, sha = get_github_state()
+        stable_tokens = ['usde', 'rai', 'frax', 'alusd', 'lusd']
+        heaven_tokens = ['ethena-usde', 'pendle', 'gmx', 'litentry', 'mantle-staked-ether']
+        prices = fetch_prices(stable_tokens + heaven_tokens)
+        state, sha = load_state()
 
-            if not state:
-                state = {
-                    "Stablecoin": {
-                        "tokens": {
-                            "usde": {"id": "ethena-usde", "amount": 3238.55},
-                            "rai": {"id": "rai", "amount": 842.67},
-                            "frax": {"id": "frax", "amount": 325.91},
-                            "alusd": {"id": "alchemix-usd", "amount": 593.8},
-                            "lusd": {"id": "liquity-usd", "amount": 584.07}
-                        },
-                        "starting_value": 5000
-                    },
-                    "Heaven": {
-                        "tokens": {
-                            "ethena": {"id": "ethena-usde", "amount": 3238.55},
-                            "pendle": {"id": "pendle", "amount": 842.67},
-                            "gmx": {"id": "gmx", "amount": 325.91},
-                            "lit": {"id": "litentry", "amount": 593.8},
-                            "meth": {"id": "mantle-staked-ether", "amount": 584.07}
-                        },
-                        "starting_value": 5000
-                    }
-                }
+        if not state.get("Stablecoin"):  # Init holdings
+            state["Stablecoin"] = {k: 5000/len(stable_tokens)/prices[k]['gbp'] for k in stable_tokens}
+        if not state.get("Heaven"):
+            state["Heaven"] = {k: 5000/len(heaven_tokens)/prices[k]['gbp'] for k in heaven_tokens}
 
-            def calculate_portfolio(portfolio):
-                total = 0
-                for k, v in portfolio['tokens'].items():
-                    price = fetch_price(v['id'])
-                    v['price'] = price
-                    v['value'] = round(price * v['amount'], 2)
-                    total += v['value']
-                portfolio['total'] = round(total, 2)
-                portfolio['gain'] = round(((total - portfolio['starting_value']) / portfolio['starting_value']) * 100, 2)
-                return portfolio
+        stable_total, stable_gain, stable_data = calculate_portfolio(
+            stable_tokens, prices, state["Stablecoin"], 5000)
+        heaven_total, heaven_gain, heaven_data = calculate_portfolio(
+            heaven_tokens, prices, state["Heaven"], 5000)
 
-            stable = calculate_portfolio(state['Stablecoin'])
-            heaven = calculate_portfolio(state['Heaven'])
+        response = {
+            "timestamp": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+            "Stablecoin": {
+                "total": f"£{stable_total}",
+                "gain": stable_gain,
+                "tokens": stable_data
+            },
+            "Heaven": {
+                "total": f"£{heaven_total}",
+                "gain": heaven_gain,
+                "tokens": heaven_data
+            }
+        }
 
-            # Save new state
-            update_github_state(state, sha)
-
-            # Respond with portfolio data
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({
-                "timestamp": datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'),
-                "Stablecoin": stable,
-                "Heaven": heaven
-            }).encode())
-
-        except Exception as e:
-            self.send_response(500)
-            self.end_headers()
-            self.wfile.write(json.dumps({"error": str(e)}).encode())
+        save_state(state, sha)
+        self.send_response(200)
+        self.send_header('Content-type','application/json')
+        self.end_headers()
+        self.wfile.write(json.dumps(response).encode())
