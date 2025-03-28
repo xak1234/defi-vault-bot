@@ -16,6 +16,10 @@
     h1 {
       color: #00ffc3;
     }
+    h2 {
+      color: #00bfb3;
+      margin-top: 3rem;
+    }
     .card {
       background: #111;
       padding: 1rem;
@@ -58,7 +62,11 @@
   <h1>💼 Daddy's Live DeFi Vault</h1>
   <p>Updated via <code>/api/update</code></p>
 
-  <div id="output"></div>
+  <h2>Stablecoin Portfolio</h2>
+  <div id="stable-output"></div>
+
+  <h2>Heaven's Vault Portfolio</h2>
+  <div id="heaven-output"></div>
 
   <script>
     async function fetchVault() {
@@ -66,8 +74,10 @@
         const res = await fetch('/api/update');
         const data = await res.json();
 
-        const output = document.getElementById('output');
-        output.innerHTML = '';
+        const stableOutput = document.getElementById('stable-output');
+        const heavenOutput = document.getElementById('heaven-output');
+        stableOutput.innerHTML = '';
+        heavenOutput.innerHTML = '';
 
         const createCard = (label, value, isChange = false) => {
           let changeClass = '';
@@ -85,31 +95,32 @@
           `;
         };
 
-        output.innerHTML += createCard('Stablecoin Strategy', data["Stablecoin Strategy"]);
-        output.innerHTML += createCard("Heaven's Vault", data["Heaven's Vault"]);
-
-        if (data["Live Prices (GBP)"]) {
-          Object.entries(data["Live Prices (GBP)"]).forEach(([token, price]) => {
-            output.innerHTML += createCard(`${token.toUpperCase()} Price`, `£${price}`);
+        // STABLECOIN PORTFOLIO
+        if (data.Stablecoin) {
+          stableOutput.innerHTML += createCard('Total Value', data.Stablecoin.total);
+          Object.entries(data.Stablecoin.tokens).forEach(([name, val]) => {
+            stableOutput.innerHTML += createCard(`${name.toUpperCase()} Price`, `£${val.price}`);
           });
+          stableOutput.innerHTML += createCard('Stablecoin Gain', `${data.Stablecoin.gain} %`, true);
         }
 
-        if (data["Gains"]) {
-          if (data["Gains"]["stable"] !== undefined) {
-            output.innerHTML += createCard("Stablecoin Gain", `${data["Gains"]["stable"]} %`, true);
-          }
-          if (data["Gains"]["heaven"] !== undefined) {
-            output.innerHTML += createCard("Heaven's Vault Gain", `${data["Gains"]["heaven"]} %`, true);
-          }
+        // HEAVEN'S VAULT
+        if (data.Heaven) {
+          heavenOutput.innerHTML += createCard('Total Value', data.Heaven.total);
+          Object.entries(data.Heaven.tokens).forEach(([name, val]) => {
+            heavenOutput.innerHTML += createCard(`${name.toUpperCase()} Price`, `£${val.price}`);
+          });
+          heavenOutput.innerHTML += createCard("Heaven's Vault Gain", `${data.Heaven.gain} %`, true);
         }
 
       } catch (err) {
-        document.getElementById('output').innerHTML = '<p>Error fetching vault data 😢</p>';
+        document.getElementById('stable-output').innerHTML = '<p>Error fetching vault data 😢</p>';
+        document.getElementById('heaven-output').innerHTML = '';
       }
     }
 
     fetchVault();
-    setInterval(fetchVault, 60000); // Refresh every 60 seconds
+    setInterval(fetchVault, 60000);
   </script>
 </body>
 </html>
