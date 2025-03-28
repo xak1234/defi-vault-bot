@@ -1,3 +1,5 @@
+console.log('Vault data:', data);
+
 fetch('vault-data.json')
   .then((res) => res.json())
   .then((data) => {
