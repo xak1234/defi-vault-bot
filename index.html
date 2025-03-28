@@ -1,126 +1,102 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8">
   <title>Daddy's DeFi Vault 💼</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     body {
       background-color: #0a0a0a;
       color: #eaeaea;
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      padding: 2rem;
-      max-width: 800px;
+      font-family: 'Segoe UI', sans-serif;
+      max-width: 900px;
       margin: auto;
+      padding: 2rem;
     }
-    h1 {
+    h1, h2 {
       color: #00ffc3;
-    }
-    h2 {
-      color: #00bfb3;
-      margin-top: 3rem;
     }
     .card {
       background: #111;
+      border: 1px solid #333;
       padding: 1rem;
-      margin: 1rem 0;
       border-radius: 8px;
-      border: 1px solid #2c2c2c;
-      transition: transform 0.3s ease, box-shadow 0.3s ease;
+      margin: 1rem 0;
     }
-    .card:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(0, 255, 195, 0.2);
-    }
-    .label {
-      font-weight: bold;
-      color: #ccc;
-    }
-    .value {
-      color: #00ffc3;
-      transition: color 0.5s ease, transform 0.3s ease;
-    }
-    .gain {
-      color: #00ff8f;
-      animation: flashGain 1s ease;
-    }
-    .loss {
-      color: #ff4b4b;
-      animation: flashLoss 1s ease;
-    }
-    @keyframes flashGain {
-      from { background-color: rgba(0, 255, 143, 0.2); }
-      to { background-color: transparent; }
-    }
-    @keyframes flashLoss {
-      from { background-color: rgba(255, 75, 75, 0.2); }
-      to { background-color: transparent; }
+    .gain { color: #00ff8f; }
+    .loss { color: #ff4b4b; }
+    canvas {
+      background: #111;
+      border-radius: 6px;
+      margin-top: 1rem;
     }
   </style>
 </head>
 <body>
   <h1>💼 Daddy's Live DeFi Vault</h1>
-  <p>Updated via <code>/api/update</code></p>
+  <p id="timestamp"></p>
 
   <h2>Stablecoin Portfolio</h2>
   <div id="stable-output"></div>
+  <canvas id="stableChart" height="120"></canvas>
 
   <h2>Heaven's Vault Portfolio</h2>
   <div id="heaven-output"></div>
+  <canvas id="heavenChart" height="120"></canvas>
 
   <script>
-    async function fetchVault() {
-      try {
-        const res = await fetch('/api/update');
-        const data = await res.json();
+    async function fetchData() {
+      const res = await fetch('/api/update');
+      const data = await res.json();
+      document.getElementById('timestamp').innerText = `Last updated: ${data.timestamp} UTC`;
 
-        const stableOutput = document.getElementById('stable-output');
-        const heavenOutput = document.getElementById('heaven-output');
-        stableOutput.innerHTML = '';
-        heavenOutput.innerHTML = '';
+      const stableDiv = document.getElementById('stable-output');
+      const heavenDiv = document.getElementById('heaven-output');
+      stableDiv.innerHTML = heavenDiv.innerHTML = '';
 
-        const createCard = (label, value, isChange = false) => {
-          let changeClass = '';
-          if (isChange && typeof value === 'string') {
-            const numeric = parseFloat(value);
-            if (!isNaN(numeric)) {
-              changeClass = numeric > 0 ? 'gain' : numeric < 0 ? 'loss' : '';
-            }
+      const card = (label, val, cls = '') => `<div class="card ${cls}"><strong>${label}</strong><br>£${val}</div>`;
+
+      stableDiv.innerHTML += card('Total Value', data.Stablecoin.total.replace('£',''));
+      Object.entries(data.Stablecoin.tokens).forEach(([k,v]) => {
+        stableDiv.innerHTML += card(`${k.toUpperCase()} Price`, v.price);
+      });
+      stableDiv.innerHTML += card('Stablecoin Gain', data.Stablecoin.gain, data.Stablecoin.gain >= 0 ? 'gain' : 'loss');
+
+      heavenDiv.innerHTML += card('Total Value', data.Heaven.total.replace('£',''));
+      Object.entries(data.Heaven.tokens).forEach(([k,v]) => {
+        heavenDiv.innerHTML += card(`${k.toUpperCase()} Price`, v.price);
+      });
+      heavenDiv.innerHTML += card("Heaven's Vault Gain", data.Heaven.gain, data.Heaven.gain >= 0 ? 'gain' : 'loss');
+
+      const drawChart = (ctxId, history) => {
+        const ctx = document.getElementById(ctxId).getContext('2d');
+        const labels = history.map(p => p.time.split(' ')[1]);
+        const values = history.map(p => p.value);
+        new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels,
+            datasets: [{
+              label: ctxId.includes('stable') ? 'Stablecoin £' : 'Heaven £',
+              data: values,
+              borderColor: ctxId.includes('stable') ? '#00ff8f' : '#00c3ff',
+              borderWidth: 2,
+              fill: false
+            }]
+          },
+          options: {
+            scales: { x: { display: false }, y: { beginAtZero: false } },
+            plugins: { legend: { display: false } }
           }
-          return `
-            <div class="card">
-              <div class="label">${label}</div>
-              <div class="value ${changeClass}">${value}</div>
-            </div>
-          `;
-        };
+        });
+      };
 
-        // STABLECOIN PORTFOLIO
-        if (data.Stablecoin) {
-          stableOutput.innerHTML += createCard('Total Value', data.Stablecoin.total);
-          Object.entries(data.Stablecoin.tokens).forEach(([name, val]) => {
-            stableOutput.innerHTML += createCard(`${name.toUpperCase()} Price`, `£${val.price}`);
-          });
-          stableOutput.innerHTML += createCard('Stablecoin Gain', `${data.Stablecoin.gain} %`, true);
-        }
-
-        // HEAVEN'S VAULT
-        if (data.Heaven) {
-          heavenOutput.innerHTML += createCard('Total Value', data.Heaven.total);
-          Object.entries(data.Heaven.tokens).forEach(([name, val]) => {
-            heavenOutput.innerHTML += createCard(`${name.toUpperCase()} Price`, `£${val.price}`);
-          });
-          heavenOutput.innerHTML += createCard("Heaven's Vault Gain", `${data.Heaven.gain} %`, true);
-        }
-
-      } catch (err) {
-        document.getElementById('stable-output').innerHTML = '<p>Error fetching vault data 😢</p>';
-        document.getElementById('heaven-output').innerHTML = '';
-      }
+      drawChart('stableChart', data.Stablecoin.history);
+      drawChart('heavenChart', data.Heaven.history);
     }
 
-    fetchVault();
-    setInterval(fetchVault, 60000);
+    fetchData();
+    setInterval(fetchData, 60000);
   </script>
 </body>
 </html>
