@@ -3,8 +3,5 @@
     "api/update.py": {
       "runtime": "python3.9"
     }
-  },
-  "routes": [
-    { "src": "/api/(.*)", "dest": "/api/update.py" }
-  ]
+  }
 }
