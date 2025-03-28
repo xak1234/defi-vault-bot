@@ -100,16 +100,18 @@ class handler(BaseHTTPRequestHandler):
 
             response = {
                 "Stablecoin": {
-                    "total": f"£{stable_total:.2f}",
-                    "gain": round(((stable_total - START_AMOUNT_STABLE) / START_AMOUNT_STABLE) * 100, 2),
+                    "initial_investment": f"£{START_AMOUNT_STABLE:.2f}",
+                    "current_value": f"£{stable_total:.2f}",
                     "gain_amount": round(stable_total - START_AMOUNT_STABLE, 2),
+                    "gain_percent": round(((stable_total - START_AMOUNT_STABLE) / START_AMOUNT_STABLE) * 100, 2),
                     "tokens": {k: {'price': v['price']} for k, v in stable_holdings.items()},
                     "history": price_history['stable']
                 },
                 "Heaven": {
-                    "total": f"£{heaven_total:.2f}",
-                    "gain": round(((heaven_total - START_AMOUNT_HEAVEN) / START_AMOUNT_HEAVEN) * 100, 2),
+                    "initial_investment": f"£{START_AMOUNT_HEAVEN:.2f}",
+                    "current_value": f"£{heaven_total:.2f}",
                     "gain_amount": round(heaven_total - START_AMOUNT_HEAVEN, 2),
+                    "gain_percent": round(((heaven_total - START_AMOUNT_HEAVEN) / START_AMOUNT_HEAVEN) * 100, 2),
                     "tokens": {k: {'price': v['price']} for k, v in heaven_holdings.items()},
                     "history": price_history['heaven']
                 },
