@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <title>Daddy's DeFi Vault 💼</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial@0.1.1/build/Chart.Financial.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
   <style>
     body {
       background-color: #0a0a0a;
@@ -46,6 +46,9 @@
   <canvas id="heavenChart" height="120"></canvas>
 
   <script>
+    let stableChartRef = null;
+    let heavenChartRef = null;
+
     async function fetchData() {
       const res = await fetch('/api/update');
       const data = await res.json();
@@ -69,31 +72,32 @@
       });
       heavenDiv.innerHTML += card("Heaven's Vault Gain", data.Heaven.gain, data.Heaven.gain >= 0 ? 'gain' : 'loss');
 
-      const drawCandleChart = (ctxId, history, color) => {
+      const drawLineChart = (ctxId, history, color, chartRef) => {
         const ctx = document.getElementById(ctxId).getContext('2d');
-        const candleData = history.map((point, i) => {
-          const val = point.value;
-          return {
-            x: i,
-            o: val - 5,
-            h: val + 10,
-            l: val - 10,
-            c: val + (Math.random() * 5 - 2.5)
-          };
-        });
-        new Chart(ctx, {
-          type: 'candlestick',
+        if (chartRef) chartRef.destroy();
+        return new Chart(ctx, {
+          type: 'line',
           data: {
+            labels: history.map(p => p.time),
             datasets: [{
-              label: ctxId.includes('stable') ? 'Stablecoin Candles' : 'Heaven Candles',
-              data: candleData,
-              color: color
+              label: ctxId.includes('stable') ? 'Stablecoin Value' : 'Heaven Vault Value',
+              data: history.map(p => p.value),
+              fill: false,
+              borderColor: color,
+              tension: 0.2
             }]
           },
           options: {
             scales: {
-              x: { display: false },
-              y: { beginAtZero: false }
+              x: {
+                type: 'time',
+                time: { unit: 'minute' },
+                ticks: { color: '#888' }
+              },
+              y: {
+                beginAtZero: false,
+                ticks: { color: '#888' }
+              }
             },
             plugins: {
               legend: { display: false }
@@ -102,8 +106,8 @@
         });
       };
 
-      drawCandleChart('stableChart', data.Stablecoin.history, '#00ff8f');
-      drawCandleChart('heavenChart', data.Heaven.history, '#00c3ff');
+      stableChartRef = drawLineChart('stableChart', data.Stablecoin.history, '#00ff8f', stableChartRef);
+      heavenChartRef = drawLineChart('heavenChart', data.Heaven.history, '#00c3ff', heavenChartRef);
     }
 
     fetchData();
