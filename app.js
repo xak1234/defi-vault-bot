@@ -3,7 +3,7 @@ let lastData = null;
 async function fetchData() {
   try {
     const res = await fetch('/api/update');
-    const data = await res.json();
+    const data = await state.json();
 
     if (!data?.stablecoin?.tokens || !data?.Heaven?.tokens) {
       console.warn("Skipping update — malformed data");
