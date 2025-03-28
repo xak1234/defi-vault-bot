@@ -121,7 +121,6 @@ class handler(BaseHTTPRequestHandler):
             stable_total, stable_values = calculate_value(prices, STABLECOINS, state["Stablecoin"].get("allocations", {}))
             heaven_total, heaven_values = calculate_value(prices, HEAVENS, state["Heaven"].get("allocations", {}))
 
-            # Sanity check before continuing
             if stable_total < 100 or heaven_total < 100:
                 raise ValueError("Sanity check failed: values too low, likely fetch failure")
 
@@ -131,12 +130,12 @@ class handler(BaseHTTPRequestHandler):
             result = {
                 "timestamp": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
                 "Stablecoin": {
-                    "total": f"\u00a3{stable_total:.2f}",
+                    "total": f"£{stable_total:.2f}",
                     "gain": f"{stable_gain}%",
                     "tokens": stable_values
                 },
                 "Heaven": {
-                    "total": f"\u00a3{heaven_total:.2f}",
+                    "total": f"£{heaven_total:.2f}",
                     "gain": f"{heaven_gain}%",
                     "tokens": heaven_values
                 }
