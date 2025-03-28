@@ -22,6 +22,11 @@
       margin: 1rem 0;
       border-radius: 8px;
       border: 1px solid #2c2c2c;
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    .card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 255, 195, 0.2);
     }
     .label {
       font-weight: bold;
@@ -29,6 +34,23 @@
     }
     .value {
       color: #00ffc3;
+      transition: color 0.5s ease, transform 0.3s ease;
+    }
+    .gain {
+      color: #00ff8f;
+      animation: flashGain 1s ease;
+    }
+    .loss {
+      color: #ff4b4b;
+      animation: flashLoss 1s ease;
+    }
+    @keyframes flashGain {
+      from { background-color: rgba(0, 255, 143, 0.2); }
+      to { background-color: transparent; }
+    }
+    @keyframes flashLoss {
+      from { background-color: rgba(255, 75, 75, 0.2); }
+      to { background-color: transparent; }
     }
   </style>
 </head>
@@ -47,14 +69,23 @@
         const output = document.getElementById('output');
         output.innerHTML = '';
 
-        const createCard = (label, value) => `
-          <div class="card">
-            <div class="label">${label}</div>
-            <div class="value">${value}</div>
-          </div>
-        `;
+        const createCard = (label, value, isChange = false) => {
+          let changeClass = '';
+          if (isChange && typeof value === 'string') {
+            const numeric = parseFloat(value);
+            if (!isNaN(numeric)) {
+              changeClass = numeric > 0 ? 'gain' : numeric < 0 ? 'loss' : '';
+            }
+          }
+          return `
+            <div class="card">
+              <div class="label">${label}</div>
+              <div class="value ${changeClass}">${value}</div>
+            </div>
+          `;
+        };
 
-        output.innerHTML += createCard('stablecoin Strategy', data["stablecoin Strategy"]);
+        output.innerHTML += createCard('Stablecoin Strategy', data["Stablecoin Strategy"]);
         output.innerHTML += createCard("Heaven's Vault", data["Heaven's Vault"]);
 
         if (data["Live Prices (GBP)"]) {
@@ -63,11 +94,13 @@
           });
         }
 
-        if (data["Gains"] && data["Gains"]["stable"] !== undefined) {
-          output.innerHTML += createCard("stablecoin Gain", `${data["Gains"]["stable"]} %`);
-        }
-        if (data["Gains"] && data["Gains"]["heaven"] !== undefined) {
-          output.innerHTML += createCard("Heaven's Vault Gain", `${data["Gains"]["heaven"]} %`);
+        if (data["Gains"]) {
+          if (data["Gains"]["stable"] !== undefined) {
+            output.innerHTML += createCard("Stablecoin Gain", `${data["Gains"]["stable"]} %`, true);
+          }
+          if (data["Gains"]["heaven"] !== undefined) {
+            output.innerHTML += createCard("Heaven's Vault Gain", `${data["Gains"]["heaven"]} %`, true);
+          }
         }
 
       } catch (err) {
