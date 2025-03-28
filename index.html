@@ -54,7 +54,7 @@
           </div>
         `;
 
-        output.innerHTML += createCard('Stablecoin Strategy', data["Stablecoin Strategy"]);
+        output.innerHTML += createCard('stablecoin Strategy', data["stablecoin Strategy"]);
         output.innerHTML += createCard("Heaven's Vault", data["Heaven's Vault"]);
 
         if (data["Live Prices (GBP)"]) {
@@ -62,6 +62,14 @@
             output.innerHTML += createCard(`${token.toUpperCase()} Price`, `£${price}`);
           });
         }
+
+        if (data["Gains"] && data["Gains"]["stable"] !== undefined) {
+          output.innerHTML += createCard("stablecoin Gain", `${data["Gains"]["stable"]} %`);
+        }
+        if (data["Gains"] && data["Gains"]["heaven"] !== undefined) {
+          output.innerHTML += createCard("Heaven's Vault Gain", `${data["Gains"]["heaven"]} %`);
+        }
+
       } catch (err) {
         document.getElementById('output').innerHTML = '<p>Error fetching vault data 😢</p>';
       }
