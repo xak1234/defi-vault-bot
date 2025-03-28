@@ -3,7 +3,10 @@ import json
 import requests
 from datetime import datetime
 
-START_AMOUNT = 5000
+START_AMOUNT_STABLE = 5000
+START_AMOUNT_HEAVEN = 5000
+
+
 
 # Cache last known good prices
 last_good_prices = {}
@@ -114,13 +117,17 @@ class handler(BaseHTTPRequestHandler):
                 "Stablecoin": {
                     "total": f"£{stable_total:.2f}",
                     "tokens": {k: {'price': v['price']} for k, v in stable_holdings.items()},
-                    "gain": round(((stable_total - START_AMOUNT) / START_AMOUNT) * 100, 2),
+                    "gain": round(((stable_total - START_AMOUNT_STABLE) / START_AMOUNT_STABLE) * 100, 2),
+
+                    
                     "history": price_history['stable']
                 },
                 "Heaven": {
                     "total": f"£{heaven_total:.2f}",
                     "tokens": {k: {'price': v['price']} for k, v in heaven_holdings.items()},
-                    "gain": round(((heaven_total - START_AMOUNT) / START_AMOUNT) * 100, 2),
+                    "gain": round(((heaven_total - START_AMOUNT_HEAVEN) / START_AMOUNT_HEAVEN) * 100, 2),
+
+                    
                     "history": price_history['heaven']
                 },
                 "timestamp": timestamp
