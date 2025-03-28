@@ -66,7 +66,7 @@ def load_state():
     except Exception as e:
         print(f"[Error] Failed to load state.json: {e}")
         return {
-            "Stablecoin": {
+            "stablecoin": {
                 "initial": 5000,
                 "allocations": {
                     "usde": 1293.03,
@@ -118,18 +118,18 @@ class handler(BaseHTTPRequestHandler):
             if not prices:
                 raise ValueError("Skipping update due to missing prices")
 
-            stable_total, stable_values = calculate_value(prices, STABLECOINS, state["Stablecoin"].get("allocations", {}))
+            stable_total, stable_values = calculate_value(prices, STABLECOINS, state["stablecoin"].get("allocations", {}))
             heaven_total, heaven_values = calculate_value(prices, HEAVENS, state["Heaven"].get("allocations", {}))
 
             if stable_total < 100 or heaven_total < 100:
                 raise ValueError("Sanity check failed: values too low, likely fetch failure")
 
-            stable_gain = round(((stable_total - state["Stablecoin"]["initial"])/state["Stablecoin"]["initial"])*100, 2)
+            stable_gain = round(((stable_total - state["stablecoin"]["initial"])/state["stablecoin"]["initial"])*100, 2)
             heaven_gain = round(((heaven_total - state["Heaven"]["initial"])/state["Heaven"]["initial"])*100, 2)
 
             result = {
                 "timestamp": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
-                "Stablecoin": {
+                "stablecoin": {
                     "total": f"£{stable_total:.2f}",
                     "gain": f"{stable_gain}%",
                     "tokens": stable_values
