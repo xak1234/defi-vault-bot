@@ -1,96 +1,103 @@
-from http.server import BaseHTTPRequestHandler
 import json
+import os
 import requests
 from datetime import datetime
 
-START_AMOUNT = 5000
+STATE_FILE = "/tmp/vault_state.json"
 
-# Working stable tokens with GBP prices
-tokens_stable = {
-    'usde': 'ethena-usde',
-    'rai': 'rai',
-    'frax': 'frax',
-    'alusd': 'alchemix-usd',
-    'lusd': 'liquity-usd'
-}
+def load_state():
+    if os.path.exists(STATE_FILE):
+        with open(STATE_FILE, 'r') as f:
+            return json.load(f)
+    return {
+        "Stablecoin": {"initial": 5000, "tokens": {}, "gain": 0},
+        "Heaven": {"initial": 5000, "tokens": {}, "gain": 0}
+    }
 
-# Heaven vault risky tokens
-tokens_heaven = {
-    'ethena': 'ethena-usde',
-    'pendle': 'pendle',
-    'gmx': 'gmx',
-    'lit': 'litentry',
-    'meth': 'mantle-staked-ether'
-}
+def save_state(state):
+    with open(STATE_FILE, 'w') as f:
+        json.dump(state, f)
 
-# Store historical values
-price_history = {
-    'stable': [],
-    'heaven': []
-}
+class handler:
+    def __init__(self, *args, **kwargs):
+        pass
 
-def fetch_live_prices(ids):
-    url = f"https://api.coingecko.com/api/v3/simple/price?ids={','.join(ids)}&vs_currencies=gbp"
-    res = requests.get(url, timeout=10)
-    return res.json()
-
-def allocate(tokens, prices):
-    portfolio = {}
-    total_value = 0
-    split = START_AMOUNT / len(tokens)
-    for name, coingecko_id in tokens.items():
-        price = prices.get(coingecko_id, {}).get('gbp', 0)
-        if price == 0:
-            continue
-        qty = split / price
-        value_now = qty * price
-        portfolio[name] = {
-            'price': round(price, 6),
-            'quantity': round(qty, 4),
-            'value': round(value_now, 2)
-        }
-        total_value += value_now
-    return portfolio, round(total_value, 2)
-
-class handler(BaseHTTPRequestHandler):
     def do_GET(self):
-        try:
-            all_ids = list(set(tokens_stable.values()) | set(tokens_heaven.values()))
-            prices = fetch_live_prices(all_ids)
+        state = load_state()
 
-            stable_holdings, stable_total = allocate(tokens_stable, prices)
-            heaven_holdings, heaven_total = allocate(tokens_heaven, prices)
+        stable_tokens = {
+            'usde': 'ethena-usde',
+            'rai': 'rai',
+            'frax': 'frax',
+            'alusd': 'alchemix-usd',
+            'lusd': 'liquity-usd'
+        }
 
-            timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
+        heaven_tokens = {
+            'ethena': 'ethena-usde',
+            'pendle': 'pendle',
+            'gmx': 'gmx',
+            'lit': 'litentry',
+            'meth': 'mantle-staked-ether'
+        }
 
-            # Save history (limit 30)
-            price_history['stable'].append({'time': timestamp, 'value': round(stable_total, 2)})
-            price_history['stable'] = price_history['stable'][-30:]
-            price_history['heaven'].append({'time': timestamp, 'value': round(heaven_total, 2)})
-            price_history['heaven'] = price_history['heaven'][-30:]
+        def fetch_prices(token_map):
+            prices = {}
+            for sym, cid in token_map.items():
+                url = f'https://api.coingecko.com/api/v3/simple/price?ids={cid}&vs_currencies=gbp'
+                r = requests.get(url).json()
+                prices[sym] = round(r[cid]['gbp'], 6)
+            return prices
 
-            response = {
-                "Stablecoin": {
-                    "total": f"£{stable_total:.2f}",
-                    "tokens": {k: {'price': v['price']} for k, v in stable_holdings.items()},
-                    "gain": round(((stable_total - START_AMOUNT) / START_AMOUNT) * 100, 2),
-                    "history": price_history['stable']
-                },
-                "Heaven": {
-                    "total": f"£{heaven_total:.2f}",
-                    "tokens": {k: {'price': v['price']} for k, v in heaven_holdings.items()},
-                    "gain": round(((heaven_total - START_AMOUNT) / START_AMOUNT) * 100, 2),
-                    "history": price_history['heaven']
-                },
-                "timestamp": timestamp
+        now = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
+
+        stable_prices = fetch_prices(stable_tokens)
+        heaven_prices = fetch_prices(heaven_tokens)
+
+        # Equal allocation
+        per_stable = state['Stablecoin']['initial'] / len(stable_tokens)
+        per_heaven = state['Heaven']['initial'] / len(heaven_tokens)
+
+        stable_value = 0
+        for sym, price in stable_prices.items():
+            amount = per_stable / price
+            val = amount * price
+            state['Stablecoin']['tokens'][sym] = {'price': price, 'amount': round(amount, 6)}
+            stable_value += val
+
+        heaven_value = 0
+        for sym, price in heaven_prices.items():
+            amount = per_heaven / price
+            val = amount * price
+            state['Heaven']['tokens'][sym] = {'price': price, 'amount': round(amount, 6)}
+            heaven_value += val
+
+        state['Stablecoin']['gain'] = round((stable_value - state['Stablecoin']['initial']) / state['Stablecoin']['initial'] * 100, 2)
+        state['Heaven']['gain'] = round((heaven_value - state['Heaven']['initial']) / state['Heaven']['initial'] * 100, 2)
+
+        response = {
+            "timestamp": now,
+            "Stablecoin": {
+                "total": f"£{stable_value:.2f}",
+                "gain": state['Stablecoin']['gain'],
+                "tokens": {sym: {"price": f"{v['price']:.6f}"} for sym, v in state['Stablecoin']['tokens'].items()}
+            },
+            "Heaven": {
+                "total": f"£{heaven_value:.2f}",
+                "gain": state['Heaven']['gain'],
+                "tokens": {sym: {"price": f"{v['price']:.6f}"} for sym, v in state['Heaven']['tokens'].items()}
             }
+        }
 
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps(response).encode())
+        save_state(state)
 
-        except Exception as e:
-            self.send_response(500)
-            self.end_headers()
-            self.wfile.write(json.dumps({'error': str(e)}).encode())
+        return {
+            "statusCode": 200,
+            "headers": {"Content-Type": "application/json"},
+            "body": json.dumps(response)
+        }
+
+    def __call__(self, environ, start_response):
+        result = self.do_GET()
+        start_response(f"{result['statusCode']} OK", list(result['headers'].items()))
+        return [result['body'].encode('utf-8')]
