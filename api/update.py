@@ -2,10 +2,17 @@ from http.server import BaseHTTPRequestHandler
 import json
 import requests
 
-STARTING_BALANCE = 5000
+START_AMOUNT = 5000
 
-# Tokens and IDs
-vault_tokens = {
+stable_tokens = {
+    'usde': 'ethena-usde',
+    'sdai': 'superstate-sdai',
+    'mimatic': 'mimatic',
+    'musd': 'mstable-usd',
+    'gdai': 'gdai'
+}
+
+heaven_tokens = {
     'ethena': 'ethena-usde',
     'pendle': 'pendle',
     'gmx': 'gmx',
@@ -13,8 +20,16 @@ vault_tokens = {
     'meth': 'mantle-staked-ether'
 }
 
-# Initial token prices at 'investment time'
-initial_prices = {
+# Initial prices at the time of investment (manually set)
+stable_initial = {
+    'usde': 0.76,
+    'sdai': 0.78,
+    'mimatic': 0.79,
+    'musd': 0.82,
+    'gdai': 0.81
+}
+
+heaven_initial = {
     'ethena': 0.76,
     'pendle': 2.03,
     'gmx': 9.89,
@@ -22,50 +37,49 @@ initial_prices = {
     'meth': 1400.00
 }
 
-# How much of each token we hold in Heaven's Vault
-equal_split = STARTING_BALANCE / len(vault_tokens)
-holdings = {
-    token: equal_split / initial_prices[token]
-    for token in vault_tokens
-}
+def calculate_portfolio(tokens, initial_prices, live_data):
+    portfolio = {
+        'total': 0,
+        'tokens': {}
+    }
+    split = START_AMOUNT / len(tokens)
+
+    for token, coingecko_id in tokens.items():
+        live_price = live_data.get(coingecko_id, {}).get('gbp', 0)
+        initial_price = initial_prices[token]
+        quantity = split / initial_price
+        value_now = quantity * live_price
+        portfolio['tokens'][token] = {
+            'price': round(live_price, 6),
+            'quantity': round(quantity, 6),
+            'value': round(value_now, 2)
+        }
+        portfolio['total'] += value_now
+
+    portfolio['total'] = f"£{portfolio['total']:.2f}"
+    gain = ((float(portfolio['total'][1:]) - START_AMOUNT) / START_AMOUNT) * 100
+    portfolio['gain'] = round(gain, 2)
+    return portfolio
 
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
         try:
-            ids = ','.join(vault_tokens.values())
-            url = f'https://api.coingecko.com/api/v3/simple/price?ids={ids}&vs_currencies=gbp'
-            res = requests.get(url, timeout=5)
-            live_data = res.json()
+            ids = ','.join(set(list(stable_tokens.values()) + list(heaven_tokens.values())))
+            url = f"https://api.coingecko.com/api/v3/simple/price?ids={ids}&vs_currencies=gbp"
+            r = requests.get(url, timeout=5)
+            live_data = r.json()
 
-            prices = {}
-            heaven_value = 0
-
-            for token, coingecko_id in vault_tokens.items():
-                live_price = live_data.get(coingecko_id, {}).get('gbp')
-                if live_price:
-                    prices[token] = round(live_price, 6)
-                    heaven_value += holdings[token] * live_price
-                else:
-                    prices[token] = "Unavailable"
-
-            stablecoin_value = STARTING_BALANCE  # Assume 1:1 backing, no fluctuation
-
-            result = {
-                "Stablecoin Strategy": f"£{stablecoin_value:.2f}",
-                "Heaven's Vault": f"£{heaven_value:.2f}",
-                "Live Prices (GBP)": prices,
-                "Gains": {
-                    "stable": 0.00,
-                    "heaven": round(((heaven_value - STARTING_BALANCE) / STARTING_BALANCE) * 100, 2)
-                }
+            response = {
+                "Stablecoin": calculate_portfolio(stable_tokens, stable_initial, live_data),
+                "Heaven": calculate_portfolio(heaven_tokens, heaven_initial, live_data)
             }
 
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
             self.end_headers()
-            self.wfile.write(json.dumps(result).encode())
+            self.wfile.write(json.dumps(response).encode())
 
         except Exception as e:
             self.send_response(500)
             self.end_headers()
-            self.wfile.write(json.dumps({"error": str(e)}).encode())
+            self.wfile.write(json.dumps({'error': str(e)}).encode())
