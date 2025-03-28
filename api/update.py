@@ -58,8 +58,26 @@ def load_state():
     except Exception as e:
         print(f"[Error] Failed to load state.json: {e}")
         return {
-            "Stablecoin": {"initial": 5000, "allocations": {}},
-            "Heaven": {"initial": 5000, "allocations": {}}
+            "Stablecoin": {
+                "initial": 5000,
+                "allocations": {
+                    "usde": 1293.03,
+                    "rai": 210.97,
+                    "frax": 1293.03,
+                    "alusd": 1050.00,
+                    "lusd": 1152.97
+                }
+            },
+            "Heaven": {
+                "initial": 5000,
+                "allocations": {
+                    "ethena": 3242.92,
+                    "pendle": 143.29,
+                    "gmx": 99.29,
+                    "lit": 2200.44,
+                    "meth": 3.23
+                }
+            }
         }
 
 def save_state(state):
