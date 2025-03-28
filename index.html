@@ -12,8 +12,6 @@
     .gain.positive { color: #4aff81; }
     .gain.negative { color: #ff4e4e; }
   </style>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial"></script>
 </head>
 <body>
 
@@ -34,10 +32,63 @@
     <div id="heaven-tokens"></div>
   </div>
 
-  <canvas id="candleChart" width="600" height="300"></canvas>
+  <script>
+    let lastData = null;
 
-  <script src="update.js"></script>
+    async function fetchData() {
+      try {
+        const res = await fetch('/api/update');
+        const data = await res.json();
 
-  
+        if (!data?.Stablecoin?.tokens || !data?.Heaven?.tokens) {
+          console.warn("Skipping update — malformed data");
+          return;
+        }
+
+        lastData = data; // update backup
+        renderVault(data);
+      } catch (e) {
+        console.error("Fetch failed:", e);
+        if (lastData) {
+          console.log("Rendering last known good data");
+          renderVault(lastData);
+        }
+      }
+    }
+
+    function renderVault(data) {
+      document.getElementById("timestamp").textContent = `Last Updated: ${data.timestamp} UTC`;
+
+      document.getElementById("stable-total").textContent = `Total Value: ${data.Stablecoin.total}`;
+      updateGain("stable-gain", data.Stablecoin.gain);
+      renderTokens("stable-tokens", data.Stablecoin.tokens);
+
+      document.getElementById("heaven-total").textContent = `Total Value: ${data.Heaven.total}`;
+      updateGain("heaven-gain", data.Heaven.gain);
+      renderTokens("heaven-tokens", data.Heaven.tokens);
+    }
+
+    function updateGain(id, gainStr) {
+      const gainEl = document.getElementById(id);
+      gainEl.textContent = `Gain: ${gainStr}`;
+      const gain = parseFloat(gainStr);
+      gainEl.className = 'gain ' + (gain > 0 ? 'positive' : 'negative');
+    }
+
+    function renderTokens(containerId, tokens) {
+      const container = document.getElementById(containerId);
+      container.innerHTML = '';
+      for (const [token, { price, value }] of Object.entries(tokens)) {
+        const row = document.createElement("div");
+        row.className = "token-row";
+        row.innerHTML = `<div>${token.toUpperCase()}</div><div>£${price.toFixed(4)} | Value: £${value.toFixed(2)}</div>`;
+        container.appendChild(row);
+      }
+    }
+
+    fetchData();
+    setInterval(fetchData, 5000);
+  </script>
+
 </body>
 </html>
