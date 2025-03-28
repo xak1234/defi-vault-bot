@@ -4,7 +4,7 @@ import requests
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler
 
-GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
+GH_TOKEN = os.getenv("GITHUB_TOKEN")
 REPO = "xak1234/defi-vault-bot"
 STATE_FILE = "vault-data/state.json"
 
