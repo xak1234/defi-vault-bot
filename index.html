@@ -3,9 +3,6 @@
 <head>
   <meta charset="UTF-8">
   <title>Daddy's DeFi Vault 💼</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
   <style>
     body {
       background-color: #0a0a0a;
@@ -28,12 +25,6 @@
     }
     .gain { color: #00ff8f; }
     .loss { color: #ff4b4b; }
-    canvas {
-      background: #111;
-      border-radius: 6px;
-      margin-top: 1rem;
-      height: 150px !important;
-    }
     .flash {
       animation: flashChange 1s ease-in-out;
     }
@@ -50,15 +41,11 @@
 
   <h2>Stablecoin Portfolio</h2>
   <div id="stable-output"></div>
-  <canvas id="stableChart"></canvas>
 
   <h2>Heaven's Vault Portfolio</h2>
   <div id="heaven-output"></div>
-  <canvas id="heavenChart"></canvas>
 
   <script>
-    let stableChartRef = null;
-    let heavenChartRef = null;
     let previousPrices = {};
 
     async function fetchData() {
@@ -87,34 +74,6 @@
         checkFlash(pid, v.price);
       });
       heavenDiv.innerHTML += card("Heaven's Vault Gain", data.Heaven.gain, 'heaven-gain', data.Heaven.gain >= 0 ? 'gain' : 'loss');
-
-      const drawChart = (ctxId, history, chartRef, color) => {
-        const ctx = document.getElementById(ctxId).getContext('2d');
-        if (chartRef) chartRef.destroy();
-        return new Chart(ctx, {
-          type: 'candlestick',
-          data: {
-            datasets: [{
-              label: ctxId.includes('stable') ? 'Stable Portfolio' : 'Heaven Portfolio',
-              data: history.map(p => ({ x: new Date(p.time), o: p.open, h: p.high, l: p.low, c: p.close })),
-              borderColor: color,
-              borderWidth: 1
-            }]
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: { legend: { display: false } },
-            scales: {
-              x: { type: 'time', time: { unit: 'minute' }, ticks: { color: '#888' } },
-              y: { ticks: { color: '#888' } }
-            }
-          }
-        });
-      };
-
-      stableChartRef = drawChart('stableChart', data.Stablecoin.history, stableChartRef, '#00ff8f');
-      heavenChartRef = drawChart('heavenChart', data.Heaven.history, heavenChartRef, '#00c3ff');
     }
 
     function checkFlash(id, newVal) {
@@ -129,7 +88,7 @@
     }
 
     fetchData();
-    setInterval(fetchData, 10000);
+    setInterval(fetchData, 5000);
   </script>
 </body>
 </html>
