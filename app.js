@@ -1,37 +1,55 @@
-console.log('Vault data:', data);
+let lastData = null;
 
-fetch('vault-data.json')
-  .then((res) => res.json())
-  .then((data) => {
-    renderPortfolio(data.stablecoin, 'stablecoin-assets', 'stablecoin-total', 'stablecoin-gain-loss');
-    renderPortfolio(data.Heaven, 'heaven-assets', 'heaven-total', 'heaven-gain-loss');
-  })
-  .catch((err) => console.error('Error loading JSON:', err));
+async function fetchData() {
+  try {
+    const res = await fetch('/api/update');
+    const data = await res.json();
 
-function renderPortfolio(portfolio, assetsId, totalId, gainLossId) {
-  const assetsContainer = document.getElementById(assetsId);
-  let currentValue = 0;
+    if (!data?.stablecoin?.tokens || !data?.Heaven?.tokens) {
+      console.warn("Skipping update — malformed data");
+      return;
+    }
 
-  for (const [asset, value] of Object.entries(portfolio.allocations)) {
-    const div = document.createElement('div');
-    div.className = 'asset';
-    div.innerHTML = `
-      <span>${asset.toUpperCase()}</span>
-      <span>£${value.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-    `;
-    assetsContainer.appendChild(div);
-    currentValue += value;
+    lastData = data; // update backup
+    renderVault(data);
+  } catch (e) {
+    console.error("Fetch failed:", e);
+    if (lastData) {
+      console.log("Rendering last known good data");
+      renderVault(lastData);
+    }
   }
-
-  const totalEl = document.getElementById(totalId);
-  totalEl.textContent = `Current Value: £${currentValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
-
-  const gainLossEl = document.getElementById(gainLossId);
-  const initial = portfolio.initial;
-  const diff = currentValue - initial;
-  const percent = ((diff / initial) * 100).toFixed(2);
-
-  const status = diff >= 0 ? 'Gain' : 'Loss';
-  const color = diff >= 0 ? '#4ade80' : '#f87171';
-  gainLossEl.innerHTML = `<span style="color: ${color}">${status}: £${Math.abs(diff).toLocaleString(undefined, { minimumFractionDigits: 2 })} (${percent}%)</span>`;
 }
+
+function renderVault(data) {
+  document.getElementById("timestamp").textContent = `Last Updated: ${data.timestamp} UTC`;
+
+  document.getElementById("stable-total").textContent = `Total Value: ${data.stablecoin.total}`;
+  updateGain("stable-gain", data.stablecoin.gain);
+  renderTokens("stable-tokens", data.stablecoin.tokens);
+
+  document.getElementById("heaven-total").textContent = `Total Value: ${data.Heaven.total}`;
+  updateGain("heaven-gain", data.Heaven.gain);
+  renderTokens("heaven-tokens", data.Heaven.tokens);
+}
+
+function updateGain(id, gainStr) {
+  const gainEl = document.getElementById(id);
+  gainEl.textContent = `Gain: ${gainStr}`;
+  const gain = parseFloat(gainStr);
+  gainEl.className = 'gain ' + (gain > 0 ? 'positive' : 'negative');
+}
+
+function renderTokens(containerId, tokens) {
+  const container = document.getElementById(containerId);
+  container.innerHTML = '';
+  for (const [token, { price, value }] of Object.entries(tokens)) {
+    const row = document.createElement("div");
+    row.className = "token-row";
+    row.innerHTML = `<div>${token.toUpperCase()}</div><div>£${price.toFixed(4)} | Value: £${value.toFixed(2)}</div>`;
+    container.appendChild(row);
+  }
+}
+
+fetchData();
+setInterval(fetchData, 5000);
