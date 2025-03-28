@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <title>Daddy's DeFi Vault 💼</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial@0.1.1/build/Chart.Financial.min.js"></script>
   <style>
     body {
       background-color: #0a0a0a;
@@ -68,35 +69,45 @@
       });
       heavenDiv.innerHTML += card("Heaven's Vault Gain", data.Heaven.gain, data.Heaven.gain >= 0 ? 'gain' : 'loss');
 
-      const drawChart = (ctxId, history) => {
+      const drawCandleChart = (ctxId, history, color) => {
         const ctx = document.getElementById(ctxId).getContext('2d');
-        const labels = history.map(p => p.time.split(' ')[1]);
-        const values = history.map(p => p.value);
+        const candleData = history.map((point, i) => {
+          const val = point.value;
+          return {
+            x: i,
+            o: val - 5,
+            h: val + 10,
+            l: val - 10,
+            c: val + (Math.random() * 5 - 2.5)
+          };
+        });
         new Chart(ctx, {
-          type: 'line',
+          type: 'candlestick',
           data: {
-            labels,
             datasets: [{
-              label: ctxId.includes('stable') ? 'Stablecoin £' : 'Heaven £',
-              data: values,
-              borderColor: ctxId.includes('stable') ? '#00ff8f' : '#00c3ff',
-              borderWidth: 2,
-              fill: false
+              label: ctxId.includes('stable') ? 'Stablecoin Candles' : 'Heaven Candles',
+              data: candleData,
+              color: color
             }]
           },
           options: {
-            scales: { x: { display: false }, y: { beginAtZero: false } },
-            plugins: { legend: { display: false } }
+            scales: {
+              x: { display: false },
+              y: { beginAtZero: false }
+            },
+            plugins: {
+              legend: { display: false }
+            }
           }
         });
       };
 
-      drawChart('stableChart', data.Stablecoin.history);
-      drawChart('heavenChart', data.Heaven.history);
+      drawCandleChart('stableChart', data.Stablecoin.history, '#00ff8f');
+      drawCandleChart('heavenChart', data.Heaven.history, '#00c3ff');
     }
 
     fetchData();
-    setInterval(fetchData, 30000);
+    setInterval(fetchData, 60000);
   </script>
 </body>
 </html>
