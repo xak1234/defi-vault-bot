@@ -30,6 +30,12 @@
     .value {
       color: #00ffc3;
     }
+    .gain {
+      color: #00ff8f;
+    }
+    .loss {
+      color: #ff4b4b;
+    }
   </style>
 </head>
 <body>
@@ -47,12 +53,21 @@
         const output = document.getElementById('output');
         output.innerHTML = '';
 
-        const createCard = (label, value) => `
-          <div class="card">
-            <div class="label">${label}</div>
-            <div class="value">${value}</div>
-          </div>
-        `;
+        const createCard = (label, value, isChange = false) => {
+          let changeClass = '';
+          if (isChange && typeof value === 'string') {
+            const numeric = parseFloat(value);
+            if (!isNaN(numeric)) {
+              changeClass = numeric > 0 ? 'gain' : numeric < 0 ? 'loss' : '';
+            }
+          }
+          return `
+            <div class="card">
+              <div class="label">${label}</div>
+              <div class="value ${changeClass}">${value}</div>
+            </div>
+          `;
+        };
 
         output.innerHTML += createCard('Stablecoin Strategy', data["Stablecoin Strategy"]);
         output.innerHTML += createCard("Heaven's Vault", data["Heaven's Vault"]);
@@ -63,11 +78,13 @@
           });
         }
 
-        if (data["Gains"] && data["Gains"]["stable"] !== undefined) {
-          output.innerHTML += createCard("Stablecoin Gain", `${data["Gains"]["stable"]} %`);
-        }
-        if (data["Gains"] && data["Gains"]["heaven"] !== undefined) {
-          output.innerHTML += createCard("Heaven's Vault Gain", `${data["Gains"]["heaven"]} %`);
+        if (data["Gains"]) {
+          if (data["Gains"]["stable"] !== undefined) {
+            output.innerHTML += createCard("Stablecoin Gain", `${data["Gains"]["stable"]} %`, true);
+          }
+          if (data["Gains"]["heaven"] !== undefined) {
+            output.innerHTML += createCard("Heaven's Vault Gain", `${data["Gains"]["heaven"]} %`, true);
+          }
         }
 
       } catch (err) {
