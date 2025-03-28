@@ -57,6 +57,10 @@ def calculate_value(prices, mapping, allocations):
             values[key] = {"price": 0, "value": 0}
     return round(total, 2), values
 
+
+if stable_total < 100 or heaven_total < 100:
+    raise Exception("Sanity check failed: totals too low")
+    
 def load_state():
     try:
         url = f"https://raw.githubusercontent.com/{REPO}/main/{STATE_FILE}"
