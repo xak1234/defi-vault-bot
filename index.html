@@ -2,113 +2,93 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Daddy's DeFi Vault 💼</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>DeFi Vault Tracker</title>
   <style>
-    body {
-      background-color: #0a0a0a;
-      color: #eaeaea;
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      padding: 2rem;
-      max-width: 800px;
-      margin: auto;
-    }
-    h1 {
-      color: #00ffc3;
-    }
-    .card {
-      background: #111;
-      padding: 1rem;
-      margin: 1rem 0;
-      border-radius: 8px;
-      border: 1px solid #2c2c2c;
-      transition: transform 0.3s ease, box-shadow 0.3s ease;
-    }
-    .card:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(0, 255, 195, 0.2);
-    }
-    .label {
-      font-weight: bold;
-      color: #ccc;
-    }
-    .value {
-      color: #00ffc3;
-      transition: color 0.5s ease, transform 0.3s ease;
-    }
-    .gain {
-      color: #00ff8f;
-      animation: flashGain 1s ease;
-    }
-    .loss {
-      color: #ff4b4b;
-      animation: flashLoss 1s ease;
-    }
-    @keyframes flashGain {
-      from { background-color: rgba(0, 255, 143, 0.2); }
-      to { background-color: transparent; }
-    }
-    @keyframes flashLoss {
-      from { background-color: rgba(255, 75, 75, 0.2); }
-      to { background-color: transparent; }
-    }
+    body { font-family: Arial, sans-serif; padding: 2em; background: #0b0c10; color: #f0f0f0; }
+    .vault { margin-bottom: 2em; border-bottom: 1px solid #333; padding-bottom: 1em; }
+    .token-row { display: flex; justify-content: space-between; padding: 0.3em 0; }
+    .gain { font-weight: bold; }
+    .gain.positive { color: #4aff81; }
+    .gain.negative { color: #ff4e4e; }
   </style>
 </head>
 <body>
-  <h1>💼 Daddy's Live DeFi Vault</h1>
-  <p>Updated via <code>/api/update</code></p>
 
-  <div id="output"></div>
+  <h1>📊 DeFi Vault Tracker</h1>
+  <div id="timestamp"></div>
+
+  <div class="vault">
+    <h2>Stablecoin Portfolio</h2>
+    <div id="stable-total"></div>
+    <div id="stable-gain" class="gain"></div>
+    <div id="stable-tokens"></div>
+  </div>
+
+  <div class="vault">
+    <h2>Heaven's Vault Portfolio</h2>
+    <div id="heaven-total"></div>
+    <div id="heaven-gain" class="gain"></div>
+    <div id="heaven-tokens"></div>
+  </div>
 
   <script>
-    async function fetchVault() {
+    let lastData = null;
+
+    async function fetchData() {
       try {
         const res = await fetch('/api/update');
         const data = await res.json();
 
-        const output = document.getElementById('output');
-        output.innerHTML = '';
-
-        const createCard = (label, value, isChange = false) => {
-          let changeClass = '';
-          if (isChange && typeof value === 'string') {
-            const numeric = parseFloat(value);
-            if (!isNaN(numeric)) {
-              changeClass = numeric > 0 ? 'gain' : numeric < 0 ? 'loss' : '';
-            }
-          }
-          return `
-            <div class="card">
-              <div class="label">${label}</div>
-              <div class="value ${changeClass}">${value}</div>
-            </div>
-          `;
-        };
-
-        output.innerHTML += createCard('Stablecoin Strategy', data["Stablecoin Strategy"]);
-        output.innerHTML += createCard("Heaven's Vault", data["Heaven's Vault"]);
-
-        if (data["Live Prices (GBP)"]) {
-          Object.entries(data["Live Prices (GBP)"]).forEach(([token, price]) => {
-            output.innerHTML += createCard(`${token.toUpperCase()} Price`, `£${price}`);
-          });
+        if (!data?.Stablecoin?.tokens || !data?.Heaven?.tokens) {
+          console.warn("Skipping update — malformed data");
+          return;
         }
 
-        if (data["Gains"]) {
-          if (data["Gains"]["stable"] !== undefined) {
-            output.innerHTML += createCard("Stablecoin Gain", `${data["Gains"]["stable"]} %`, true);
-          }
-          if (data["Gains"]["heaven"] !== undefined) {
-            output.innerHTML += createCard("Heaven's Vault Gain", `${data["Gains"]["heaven"]} %`, true);
-          }
+        lastData = data; // update backup
+        renderVault(data);
+      } catch (e) {
+        console.error("Fetch failed:", e);
+        if (lastData) {
+          console.log("Rendering last known good data");
+          renderVault(lastData);
         }
-
-      } catch (err) {
-        document.getElementById('output').innerHTML = '<p>Error fetching vault data 😢</p>';
       }
     }
 
-    fetchVault();
+    function renderVault(data) {
+      document.getElementById("timestamp").textContent = `Last Updated: ${data.timestamp} UTC`;
+
+      document.getElementById("stable-total").textContent = `Total Value: ${data.Stablecoin.total}`;
+      updateGain("stable-gain", data.Stablecoin.gain);
+      renderTokens("stable-tokens", data.Stablecoin.tokens);
+
+      document.getElementById("heaven-total").textContent = `Total Value: ${data.Heaven.total}`;
+      updateGain("heaven-gain", data.Heaven.gain);
+      renderTokens("heaven-tokens", data.Heaven.tokens);
+    }
+
+    function updateGain(id, gainStr) {
+      const gainEl = document.getElementById(id);
+      gainEl.textContent = `Gain: ${gainStr}`;
+      const gain = parseFloat(gainStr);
+      gainEl.className = 'gain ' + (gain > 0 ? 'positive' : 'negative');
+    }
+
+    function renderTokens(containerId, tokens) {
+      const container = document.getElementById(containerId);
+      container.innerHTML = '';
+      for (const [token, { price, value }] of Object.entries(tokens)) {
+        const row = document.createElement("div");
+        row.className = "token-row";
+        row.innerHTML = `<div>${token.toUpperCase()}</div><div>£${price.toFixed(4)} | Value: £${value.toFixed(2)}</div>`;
+        container.appendChild(row);
+      }
+    }
+
+    fetchData();
+    setInterval(fetchData, 5000);
   </script>
+
 </body>
 </html>
