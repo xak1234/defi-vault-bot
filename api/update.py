@@ -1,94 +1,42 @@
+from http.server import BaseHTTPRequestHandler
 import json
 import requests
-from datetime import datetime
 
-def handler(event, context):
-    # Check if the request method is GET
-    if event.get('httpMethod') != 'GET':
-        return {
-            'statusCode': 405,
-            'body': json.dumps({'message': 'Method not allowed'})
-        }
+class handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        prices = {}
 
-    try:
-        # Define tokens and their CoinGecko IDs
         tokens = {
             'ethena': 'ethena-usde',
             'pendle': 'pendle',
             'gmx': 'gmx',
-            'lit': 'litentry'
+            'lit': 'litentry',
+            'meth': 'mantle-staked-ether'
         }
 
-        # Fetch token prices from CoinGecko
-        token_ids = ','.join(tokens.values())
-        price_response = requests.get(f'https://api.coingecko.com/api/v3/simple/price?ids={token_ids}&vs_currencies=usd')
-        price_response.raise_for_status()
-        prices = price_response.json()
+        for key, coingecko_id in tokens.items():
+            try:
+                url = f'https://api.coingecko.com/api/v3/simple/price?ids={coingecko_id}&vs_currencies=gbp'
+                res = requests.get(url, timeout=5)
+                data = res.json()
+                if coingecko_id in data and 'gbp' in data[coingecko_id]:
+                    prices[key] = data[coingecko_id]['gbp']
+                else:
+                    prices[key] = 'Unavailable'
+            except Exception as e:
+                prices[key] = f"Error: {str(e)}"
 
-        # Define initial investments (hypothetical amounts for testing)
-        investments = [
-            {
-                'platform': 'Ethena',
-                'assets': 'USDe',
-                'amount': 2500,  # $2,500
-                'apy': 15.0  # Hypothetical APY
-            },
-            {
-                'platform': 'Pendle',
-                'assets': 'PENDLE',
-                'amount': 2500,  # $2,500
-                'apy': 20.0  # Hypothetical APY
-            },
-            {
-                'platform': 'GMX',
-                'assets': 'GMX',
-                'amount': 2500,  # $2,500
-                'apy': 25.0  # Hypothetical APY
-            },
-            {
-                'platform': 'LIT',
-                'assets': 'LIT',
-                'amount': 2500,  # $2,500
-                'apy': 18.0  # Hypothetical APY
-            }
-        ]
+        # Simulated values
+        stablecoin_value = 5000 * (1 + 0.055)
+        heavens_vault_value = 5000 * (1 + 0.09)
 
-        # Calculate current values and hourly returns
-        for investment in investments:
-            token_id = tokens[investment['platform'].lower()]
-            price = prices[token_id]['usd']
-            # Assume the investment amount is in USD, and we bought tokens at the current price
-            # For simplicity, we're not adjusting for price changes over time
-            investment['total_value'] = investment['amount']  # Simplified: no price change
-            investment['hourly_return'] = (investment['apy'] / 100 / 365 / 24) * investment['amount']
-
-        # Construct the portfolio data
-        portfolio_data = {
-            'date': datetime.now().isoformat(),
-            'portfolios': [
-                {
-                    'name': 'TestPortfolio',
-                    'investments': investments
-                }
-            ],
-            'total_value': sum(investment['total_value'] for investment in investments)
+        response = {
+            "Stablecoin Strategy": f"£{stablecoin_value:.2f}",
+            "Heaven's Vault": f"£{heavens_vault_value:.2f}",
+            "Live Prices (GBP)": prices
         }
 
-        # Calculate total invested and total lost
-        total_invested = sum(investment['amount'] for investment in investments)
-        total_lost = total_invested - portfolio_data['total_value']
-
-        # Add to the response
-        portfolio_data['total_invested'] = total_invested
-        portfolio_data['total_lost'] = total_lost
-
-        return {
-            'statusCode': 200,
-            'body': json.dumps(portfolio_data)
-        }
-    except Exception as e:
-        print(f"Error: {str(e)}")
-        return {
-            'statusCode': 500,
-            'body': json.dumps({'message': 'Error fetching data'})
-        }
+        self.send_response(200)
+        self.send_header('Content-type','application/json')
+        self.end_headers()
+        self.wfile.write(json.dumps(response).encode())
