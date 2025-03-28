@@ -1,158 +1,94 @@
-import json
-import os
-import requests
-from datetime import datetime
-from http.server import BaseHTTPRequestHandler
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>DeFi Vault Tracker</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 2em; background: #0b0c10; color: #f0f0f0; }
+    .vault { margin-bottom: 2em; border-bottom: 1px solid #333; padding-bottom: 1em; }
+    .token-row { display: flex; justify-content: space-between; padding: 0.3em 0; }
+    .gain { font-weight: bold; }
+    .gain.positive { color: #4aff81; }
+    .gain.negative { color: #ff4e4e; }
+  </style>
+</head>
+<body>
 
-GH_TOKEN = os.getenv("GITHUB_TOKEN")
-REPO = "xak1234/defi-vault-bot"
-STATE_FILE = "vault-data/state.json"
+  <h1>📊 DeFi Vault Tracker</h1>
+  <div id="timestamp"></div>
 
-STABLECOINS = {
-    'usde': 'ethena-usde',
-    'rai': 'rai',
-    'frax': 'frax',
-    'alusd': 'alchemix-usd',
-    'lusd': 'liquity-usd'
-}
+  <div class="vault">
+    <h2>stablecoin Portfolio</h2>
+    <div id="stable-total"></div>
+    <div id="stable-gain" class="gain"></div>
+    <div id="stable-tokens"></div>
+  </div>
 
-HEAVENS = {
-    'ethena': 'ethena-usde',
-    'pendle': 'pendle',
-    'gmx': 'gmx',
-    'lit': 'litentry',
-    'meth': 'mantle-staked-ether'
-}
+  <div class="vault">
+    <h2>Heaven's Vault Portfolio</h2>
+    <div id="heaven-total"></div>
+    <div id="heaven-gain" class="gain"></div>
+    <div id="heaven-tokens"></div>
+  </div>
 
-def fetch_prices():
-    try:
-        combined = {**STABLECOINS, **HEAVENS}
-        ids = ','.join(set(combined.values()))
-        url = f"https://api.coingecko.com/api/v3/simple/price?ids={ids}&vs_currencies=gbp"
-        r = requests.get(url, timeout=10)
-        r.raise_for_status()
-        prices = r.json()
+  <script>
+    let lastData = null;
 
-        if not prices or any(value == {} for value in prices.values()):
-            raise ValueError("Received empty or partial prices from CoinGecko")
+    async function fetchData() {
+      try {
+        const res = await fetch('/api/update');
+        const data = await res.json();
 
-        return prices
-    except Exception as e:
-        print(f"[Error] Failed to fetch prices: {e}")
-        return {}
-
-def calculate_value(prices, mapping, allocations):
-    values = {}
-    total = 0
-    for key, coingecko_id in mapping.items():
-        try:
-            price = float(prices.get(coingecko_id, {}).get('gbp', 0))
-            amount = float(allocations.get(key, 0))
-            if price == 0:
-                raise ValueError(f"Missing price for {key}")
-            values[key] = {"price": round(price, 6), "value": round(price * amount, 2)}
-            total += price * amount
-        except Exception as e:
-            print(f"[Warning] Failed to calculate value for {key}: {e}")
-            values[key] = {"price": 0, "value": 0}
-    return round(total, 2), values
-
-
-if stable_total < 100 or heaven_total < 100:
-    raise Exception("Sanity check failed: totals too low")
-    
-def load_state():
-    try:
-        url = f"https://raw.githubusercontent.com/{REPO}/main/{STATE_FILE}"
-        r = requests.get(url, timeout=10)
-        r.raise_for_status()
-        return r.json()
-    except Exception as e:
-        print(f"[Error] Failed to load state.json: {e}")
-        return {
-            "stablecoin": {
-                "initial": 5000,
-                "allocations": {
-                    "usde": 1293.03,
-                    "rai": 210.97,
-                    "frax": 1293.03,
-                    "alusd": 1050.00,
-                    "lusd": 1152.97
-                }
-            },
-            "Heaven": {
-                "initial": 5000,
-                "allocations": {
-                    "ethena": 3242.92,
-                    "pendle": 143.29,
-                    "gmx": 99.29,
-                    "lit": 2200.44,
-                    "meth": 3.23
-                }
-            }
+        if (!data?.stablecoin?.tokens || !data?.Heaven?.tokens) {
+          console.warn("Skipping update — malformed data");
+          return;
         }
 
-def save_state(state):
-    headers = {
-        "Authorization": f"token {GITHUB_TOKEN}",
-        "Accept": "application/vnd.github+json"
+        lastData = data; // update backup
+        renderVault(data);
+      } catch (e) {
+        console.error("Fetch failed:", e);
+        if (lastData) {
+          console.log("Rendering last known good data");
+          renderVault(lastData);
+        }
+      }
     }
-    get_url = f"https://api.github.com/repos/{REPO}/contents/{STATE_FILE}"
-    get_resp = requests.get(get_url, headers=headers)
-    sha = get_resp.json().get("sha")
 
-    put_data = {
-        "message": "Update vault state",
-        "content": base64_encode(json.dumps(state, indent=2)),
-        "sha": sha
+    function renderVault(data) {
+      document.getElementById("timestamp").textContent = `Last Updated: ${data.timestamp} UTC`;
+
+      document.getElementById("stable-total").textContent = `Total Value: ${data.stablecoin.total}`;
+      updateGain("stable-gain", data.stablecoin.gain);
+      renderTokens("stable-tokens", data.stablecoin.tokens);
+
+      document.getElementById("heaven-total").textContent = `Total Value: ${data.Heaven.total}`;
+      updateGain("heaven-gain", data.Heaven.gain);
+      renderTokens("heaven-tokens", data.Heaven.tokens);
     }
-    r = requests.put(get_url, headers=headers, json=put_data)
-    return r.json()
 
-def base64_encode(s):
-    from base64 import b64encode
-    return b64encode(s.encode()).decode()
+    function updateGain(id, gainStr) {
+      const gainEl = document.getElementById(id);
+      gainEl.textContent = `Gain: ${gainStr}`;
+      const gain = parseFloat(gainStr);
+      gainEl.className = 'gain ' + (gain > 0 ? 'positive' : 'negative');
+    }
 
-class handler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        try:
-            state = load_state()
-            prices = fetch_prices()
+    function renderTokens(containerId, tokens) {
+      const container = document.getElementById(containerId);
+      container.innerHTML = '';
+      for (const [token, { price, value }] of Object.entries(tokens)) {
+        const row = document.createElement("div");
+        row.className = "token-row";
+        row.innerHTML = `<div>${token.toUpperCase()}</div><div>£${price.toFixed(4)} | Value: £${value.toFixed(2)}</div>`;
+        container.appendChild(row);
+      }
+    }
 
-            if not prices:
-                raise ValueError("Skipping update due to missing prices")
+    fetchData();
+    setInterval(fetchData, 5000);
+  </script>
 
-            stable_total, stable_values = calculate_value(prices, STABLECOINS, state["stablecoin"].get("allocations", {}))
-            heaven_total, heaven_values = calculate_value(prices, HEAVENS, state["Heaven"].get("allocations", {}))
-
-            if stable_total < 100 or heaven_total < 100:
-                raise ValueError("Sanity check failed: values too low, likely fetch failure")
-
-            stable_gain = round(((stable_total - state["stablecoin"]["initial"])/state["stablecoin"]["initial"])*100, 2)
-            heaven_gain = round(((heaven_total - state["Heaven"]["initial"])/state["Heaven"]["initial"])*100, 2)
-
-            result = {
-                "timestamp": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
-                "stablecoin": {
-                    "total": f"£{stable_total:.2f}",
-                    "gain": f"{stable_gain}%",
-                    "tokens": stable_values
-                },
-                "Heaven": {
-                    "total": f"£{heaven_total:.2f}",
-                    "gain": f"{heaven_gain}%",
-                    "tokens": heaven_values
-                }
-            }
-
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps(result).encode())
-
-        except Exception as e:
-            print(f"[Fatal] API handler failed: {e}")
-            self.send_response(500)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({"error": "Internal server error"}).encode())
+</body>
+</html>
