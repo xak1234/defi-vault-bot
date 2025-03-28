@@ -5,6 +5,10 @@ from datetime import datetime
 
 START_AMOUNT = 5000
 
+# Cache last known good prices
+last_good_prices = {}
+
+
 # Working stable tokens with GBP prices
 tokens_stable = {
     'usde': 'ethena-usde',
@@ -28,11 +32,39 @@ price_history = {
     'stable': [],
     'heaven': []
 }
+import time  # Add at the top if not present
 
 def fetch_live_prices(ids):
-    url = f"https://api.coingecko.com/api/v3/simple/price?ids={','.join(ids)}&vs_currencies=gbp"
-    res = requests.get(url, timeout=10)
-    return res.json()
+    global last_good_prices
+    try:
+        url = f"https://api.coingecko.com/api/v3/simple/price?ids={','.join(ids)}&vs_currencies=gbp"
+        res = requests.get(url, timeout=10)
+        prices = res.json()
+
+        # Check if we got actual prices
+        if not prices or any(prices.get(i) is None for i in ids):
+            raise ValueError("Incomplete price data received.")
+
+        last_good_prices = prices  # Update cache
+        return prices
+
+    except Exception as e:
+        print(f"⚠️ Fetch failed: {e}. Retrying in 2 seconds...")
+        time.sleep(2)
+        try:
+            res = requests.get(url, timeout=10)
+            prices = res.json()
+
+            if not prices or any(prices.get(i) is None for i in ids):
+                raise ValueError("Still incomplete on retry.")
+
+            last_good_prices = prices  # Update cache
+            return prices
+
+        except Exception as e2:
+            print(f"🔥 Retry failed: {e2}. Using last known good prices.")
+            return last_good_prices.copy()
+
 
 def allocate(tokens, prices):
     portfolio = {}
