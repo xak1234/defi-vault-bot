@@ -35,7 +35,7 @@ def calculate_value(prices, mapping, allocations):
     total = 0
     for key, coingecko_id in mapping.items():
         price = prices.get(coingecko_id, {}).get('gbp', 0)
-        amount = allocations.get(key, 0)
+        amount = float(allocations.get(key, 0))
         values[key] = {"price": round(price, 6), "value": round(price * amount, 2)}
         total += price * amount
     return round(total, 2), values
