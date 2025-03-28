@@ -1,22 +1,17 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Daddy's DeFi Vault</title>
+  <title>🧠 Daddy's DeFi Vault</title>
   <meta charset="UTF-8">
   <style>
     body {
-      background-color: #111;
+      background: #111;
       color: #0f0;
       font-family: monospace;
       padding: 20px;
     }
     .section {
       margin-bottom: 2rem;
-    }
-    .title {
-      font-size: 1.5rem;
-      font-weight: bold;
-      margin-bottom: 0.5rem;
     }
     .gain-positive {
       color: #0f0;
@@ -26,49 +21,92 @@
     }
   </style>
   <script>
-    async function loadData() {
+    const START_STABLE = 5000;
+    const START_HEAVEN = 5000;
+
+    const stableTokens = {
+      'USDE': 'ethena-usde',
+      'RAI': 'rai',
+      'FRAX': 'frax',
+      'ALUSD': 'alchemix-usd',
+      'LUSD': 'liquity-usd'
+    };
+
+    const heavenTokens = {
+      'ETHENA': 'ethena-usde',
+      'PENDLE': 'pendle',
+      'GMX': 'gmx',
+      'LIT': 'litentry',
+      'METH': 'mantle-staked-ether'
+    };
+
+    async function fetchPrices(tokens) {
+      const ids = Object.values(tokens).join(',');
+      const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=gbp`);
+      return res.json();
+    }
+
+    function calculatePortfolio(tokens, prices, startAmount) {
+      const perToken = startAmount / Object.keys(tokens).length;
+      let total = 0;
+      const holdings = [];
+
+      for (const [symbol, id] of Object.entries(tokens)) {
+        const price = prices[id]?.gbp ?? 1;
+        const qty = perToken / price;
+        const value = qty * price;
+        total += value;
+        holdings.push({ symbol, price, qty, value });
+      }
+
+      return { total, holdings };
+    }
+
+    function renderVault(title, initial, portfolio) {
+      const gain = portfolio.total - initial;
+      const gainPercent = (gain / initial) * 100;
+      const gainClass = gain >= 0 ? 'gain-positive' : 'gain-negative';
+
+      const tokenList = portfolio.holdings.map(t => {
+        return `<li>${t.symbol}: £${t.price.toFixed(4)}</li>`;
+      }).join('');
+
+      return `
+        <div class="section">
+          <h2>💼 ${title}</h2>
+          Initial Investment: £${initial.toFixed(2)}<br>
+          Current Value: £${portfolio.total.toFixed(2)}<br>
+          <span class="${gainClass}">
+            Gain/Loss: ${gain >= 0 ? '+' : ''}£${gain.toFixed(2)} (${gainPercent.toFixed(2)}%)
+          </span><br><br>
+          Token Prices:
+          <ul>${tokenList}</ul>
+        </div>
+      `;
+    }
+
+    async function refresh() {
+      document.getElementById('output').innerHTML = '⏳ Fetching prices...';
       try {
-        const res = await fetch('http://localhost:8000');
-        const data = await res.json();
-        const out = document.getElementById('output');
-        out.innerHTML = "";
+        const stablePrices = await fetchPrices(stableTokens);
+        const heavenPrices = await fetchPrices(heavenTokens);
 
-        const formatMoney = v => `£${parseFloat(v).toFixed(2)}`;
+        const stable = calculatePortfolio(stableTokens, stablePrices, START_STABLE);
+        const heaven = calculatePortfolio(heavenTokens, heavenPrices, START_HEAVEN);
 
-        for (const [vaultName, vault] of Object.entries(data)) {
-          if (vaultName === "timestamp") continue;
+        const stableHTML = renderVault('Stablecoin Portfolio', START_STABLE, stable);
+        const heavenHTML = renderVault('Heaven\'s Vault Portfolio', START_HEAVEN, heaven);
 
-          const gainClass = vault.gain_amount >= 0 ? "gain-positive" : "gain-negative";
-
-          const section = document.createElement("div");
-          section.className = "section";
-          section.innerHTML = `
-            <div class="title">💼 ${vaultName} Portfolio</div>
-            Initial Investment: ${vault.initial_investment}<br>
-            Current Value: ${vault.current_value}<br>
-            <span class="${gainClass}">
-              Gain/Loss: ${vault.gain_amount >= 0 ? "+" : ""}${formatMoney(vault.gain_amount)} (${vault.gain_percent}%)
-            </span>
-            <br><br>
-            Token Prices:<br>
-            <ul>
-              ${Object.entries(vault.tokens).map(([symbol, info]) =>
-                `<li>${symbol.toUpperCase()}: £${info.price.toFixed(4)}</li>`).join('')}
-            </ul>
-          `;
-          out.appendChild(section);
-        }
-
-        document.getElementById("timestamp").textContent = `📅 Last updated: ${data.timestamp}`;
-
-      } catch (e) {
-        document.getElementById("output").innerHTML = "❌ Failed to load data.";
-        console.error(e);
+        document.getElementById('output').innerHTML = stableHTML + heavenHTML;
+        document.getElementById('timestamp').textContent = '📅 Last updated: ' + new Date().toLocaleString();
+      } catch (err) {
+        document.getElementById('output').innerHTML = '❌ Failed to fetch prices.';
+        console.error(err);
       }
     }
 
-    setInterval(loadData, 60000); // Refresh every 60 seconds
-    window.onload = loadData;
+    setInterval(refresh, 60000);
+    window.onload = refresh;
   </script>
 </head>
 <body>
