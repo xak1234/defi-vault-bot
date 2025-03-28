@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <title>Daddy's DeFi Vault 💼</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
   <style>
     body {
@@ -23,6 +24,7 @@
       padding: 1rem;
       border-radius: 8px;
       margin: 1rem 0;
+      transition: background 0.3s;
     }
     .gain { color: #00ff8f; }
     .loss { color: #ff4b4b; }
@@ -30,6 +32,15 @@
       background: #111;
       border-radius: 6px;
       margin-top: 1rem;
+      height: 150px !important;
+    }
+    .flash {
+      animation: flashChange 1s ease-in-out;
+    }
+    @keyframes flashChange {
+      0% { background-color: #333; }
+      50% { background-color: #555; }
+      100% { background-color: #333; }
     }
   </style>
 </head>
@@ -39,15 +50,16 @@
 
   <h2>Stablecoin Portfolio</h2>
   <div id="stable-output"></div>
-  <canvas id="stableChart" height="120"></canvas>
+  <canvas id="stableChart"></canvas>
 
   <h2>Heaven's Vault Portfolio</h2>
   <div id="heaven-output"></div>
-  <canvas id="heavenChart" height="120"></canvas>
+  <canvas id="heavenChart"></canvas>
 
   <script>
     let stableChartRef = null;
     let heavenChartRef = null;
+    let previousPrices = {};
 
     async function fetchData() {
       const res = await fetch('/api/update');
@@ -58,60 +70,66 @@
       const heavenDiv = document.getElementById('heaven-output');
       stableDiv.innerHTML = heavenDiv.innerHTML = '';
 
-      const card = (label, val, cls = '') => `<div class="card ${cls}"><strong>${label}</strong><br>£${val}</div>`;
+      const card = (label, val, id, cls = '') => `<div id="${id}" class="card ${cls}"><strong>${label}</strong><br>£${val}</div>`;
 
-      stableDiv.innerHTML += card('Total Value', data.Stablecoin.total.replace('£',''));
+      stableDiv.innerHTML += card('Total Value', data.Stablecoin.total.replace('£',''), 'stable-total');
       Object.entries(data.Stablecoin.tokens).forEach(([k,v]) => {
-        stableDiv.innerHTML += card(`${k.toUpperCase()} Price`, v.price);
+        const pid = `stable-${k}`;
+        stableDiv.innerHTML += card(`${k.toUpperCase()} Price`, v.price, pid);
+        checkFlash(pid, v.price);
       });
-      stableDiv.innerHTML += card('Stablecoin Gain', data.Stablecoin.gain, data.Stablecoin.gain >= 0 ? 'gain' : 'loss');
+      stableDiv.innerHTML += card('Stablecoin Gain', data.Stablecoin.gain, 'stable-gain', data.Stablecoin.gain >= 0 ? 'gain' : 'loss');
 
-      heavenDiv.innerHTML += card('Total Value', data.Heaven.total.replace('£',''));
+      heavenDiv.innerHTML += card('Total Value', data.Heaven.total.replace('£',''), 'heaven-total');
       Object.entries(data.Heaven.tokens).forEach(([k,v]) => {
-        heavenDiv.innerHTML += card(`${k.toUpperCase()} Price`, v.price);
+        const pid = `heaven-${k}`;
+        heavenDiv.innerHTML += card(`${k.toUpperCase()} Price`, v.price, pid);
+        checkFlash(pid, v.price);
       });
-      heavenDiv.innerHTML += card("Heaven's Vault Gain", data.Heaven.gain, data.Heaven.gain >= 0 ? 'gain' : 'loss');
+      heavenDiv.innerHTML += card("Heaven's Vault Gain", data.Heaven.gain, 'heaven-gain', data.Heaven.gain >= 0 ? 'gain' : 'loss');
 
-      const drawLineChart = (ctxId, history, color, chartRef) => {
+      const drawChart = (ctxId, history, chartRef, color) => {
         const ctx = document.getElementById(ctxId).getContext('2d');
         if (chartRef) chartRef.destroy();
         return new Chart(ctx, {
-          type: 'line',
+          type: 'candlestick',
           data: {
-            labels: history.map(p => p.time),
             datasets: [{
-              label: ctxId.includes('stable') ? 'Stablecoin Value' : 'Heaven Vault Value',
-              data: history.map(p => p.value),
-              fill: false,
+              label: ctxId.includes('stable') ? 'Stable Portfolio' : 'Heaven Portfolio',
+              data: history.map(p => ({ x: new Date(p.time), o: p.open, h: p.high, l: p.low, c: p.close })),
               borderColor: color,
-              tension: 0.2
+              borderWidth: 1
             }]
           },
           options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
             scales: {
-              x: {
-                type: 'time',
-                time: { unit: 'minute' },
-                ticks: { color: '#888' }
-              },
-              y: {
-                beginAtZero: false,
-                ticks: { color: '#888' }
-              }
-            },
-            plugins: {
-              legend: { display: false }
+              x: { type: 'time', time: { unit: 'minute' }, ticks: { color: '#888' } },
+              y: { ticks: { color: '#888' } }
             }
           }
         });
       };
 
-      stableChartRef = drawLineChart('stableChart', data.Stablecoin.history, '#00ff8f', stableChartRef);
-      heavenChartRef = drawLineChart('heavenChart', data.Heaven.history, '#00c3ff', heavenChartRef);
+      stableChartRef = drawChart('stableChart', data.Stablecoin.history, stableChartRef, '#00ff8f');
+      heavenChartRef = drawChart('heavenChart', data.Heaven.history, heavenChartRef, '#00c3ff');
+    }
+
+    function checkFlash(id, newVal) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const prev = previousPrices[id];
+      if (prev && prev !== newVal) {
+        el.classList.add('flash');
+        setTimeout(() => el.classList.remove('flash'), 1000);
+      }
+      previousPrices[id] = newVal;
     }
 
     fetchData();
-    setInterval(fetchData, 10000);
+    setInterval(fetchData, 60000);
   </script>
 </body>
 </html>
