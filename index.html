@@ -59,13 +59,13 @@
 
       const card = (label, val, id, cls = '') => `<div id="${id}" class="card ${cls}"><strong>${label}</strong><br>£${val}</div>`;
 
-      stableDiv.innerHTML += card('Total Value', data.Stablecoin.total.replace('£',''), 'stable-total');
-      Object.entries(data.Stablecoin.tokens).forEach(([k,v]) => {
+      stableDiv.innerHTML += card('Total Value', data.stablecoin.total.replace('£',''), 'stable-total');
+      Object.entries(data.stablecoin.tokens).forEach(([k,v]) => {
         const pid = `stable-${k}`;
         stableDiv.innerHTML += card(`${k.toUpperCase()} Price`, v.price, pid);
         checkFlash(pid, v.price);
       });
-      stableDiv.innerHTML += card('Stablecoin Gain', data.Stablecoin.gain, 'stable-gain', data.Stablecoin.gain >= 0 ? 'gain' : 'loss');
+      stableDiv.innerHTML += card('Stablecoin Gain', data.stablecoin.gain, 'stable-gain', data.stablecoin.gain >= 0 ? 'gain' : 'loss');
 
       heavenDiv.innerHTML += card('Total Value', data.Heaven.total.replace('£',''), 'heaven-total');
       Object.entries(data.Heaven.tokens).forEach(([k,v]) => {
