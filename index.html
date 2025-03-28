@@ -39,7 +39,7 @@
   <h1>💼 Daddy's Live DeFi Vault</h1>
   <p id="timestamp"></p>
 
-  <h2>Stablecoin Portfolio</h2>
+  <h2>stablecoin Portfolio</h2>
   <div id="stable-output"></div>
 
   <h2>Heaven's Vault Portfolio</h2>
@@ -65,7 +65,7 @@
         stableDiv.innerHTML += card(`${k.toUpperCase()} Price`, v.price, pid);
         checkFlash(pid, v.price);
       });
-      stableDiv.innerHTML += card('Stablecoin Gain', data.stablecoin.gain, 'stable-gain', data.stablecoin.gain >= 0 ? 'gain' : 'loss');
+      stableDiv.innerHTML += card('stablecoin Gain', data.stablecoin.gain, 'stable-gain', data.stablecoin.gain >= 0 ? 'gain' : 'loss');
 
       heavenDiv.innerHTML += card('Total Value', data.Heaven.total.replace('£',''), 'heaven-total');
       Object.entries(data.Heaven.tokens).forEach(([k,v]) => {
