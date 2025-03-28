@@ -1,77 +1,99 @@
-from http.server import BaseHTTPRequestHandler
-import json, requests, base64, os
+import json
+import os
+import requests
 from datetime import datetime
+from http.server import BaseHTTPRequestHandler
 
-TOKEN = os.getenv("GH_TOKEN")
+GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 REPO = "xak1234/defi-vault-bot"
 STATE_FILE = "vault-data/state.json"
-HEADERS = {"Authorization": f"token {TOKEN}"}
 
-def fetch_prices(ids):
-    ids_joined = ",".join(ids)
-    url = f"https://api.coingecko.com/api/v3/simple/price?ids={ids_joined}&vs_currencies=gbp"
-    return requests.get(url).json()
+STABLECOINS = {
+    'usde': 'ethena-usde',
+    'rai': 'rai',
+    'frax': 'frax',
+    'alusd': 'alchemix-usd',
+    'lusd': 'liquity-usd'
+}
+
+HEAVENS = {
+    'ethena': 'ethena-usde',
+    'pendle': 'pendle',
+    'gmx': 'gmx',
+    'lit': 'litentry',
+    'meth': 'mantle-staked-ether'
+}
+
+def fetch_prices(coin_dict):
+    ids = ','.join(coin_dict.values())
+    url = f"https://api.coingecko.com/api/v3/simple/price?ids={ids}&vs_currencies=gbp"
+    r = requests.get(url)
+    return r.json()
+
+def calculate_value(prices, mapping, allocations):
+    values = {}
+    total = 0
+    for key, coingecko_id in mapping.items():
+        price = prices.get(coingecko_id, {}).get('gbp', 0)
+        amount = allocations.get(key, 0)
+        values[key] = {"price": round(price, 6), "value": round(price * amount, 2)}
+        total += price * amount
+    return round(total, 2), values
 
 def load_state():
-    r = requests.get(f"https://api.github.com/repos/{REPO}/contents/{STATE_FILE}", headers=HEADERS)
-    if r.status_code == 200:
-        content = base64.b64decode(r.json()["content"]).decode()
-        sha = r.json()["sha"]
-        return json.loads(content), sha
-    return {"Stablecoin": {}, "Heaven": {}}, None
+    url = f"https://raw.githubusercontent.com/{REPO}/main/{STATE_FILE}"
+    r = requests.get(url)
+    return r.json()
 
-def save_state(state, sha):
-    body = {
-        "message": "Update state",
-        "content": base64.b64encode(json.dumps(state).encode()).decode(),
+def save_state(state):
+    headers = {
+        "Authorization": f"token {GITHUB_TOKEN}",
+        "Accept": "application/vnd.github+json"
+    }
+    get_url = f"https://api.github.com/repos/{REPO}/contents/{STATE_FILE}"
+    get_resp = requests.get(get_url, headers=headers)
+    sha = get_resp.json().get("sha")
+
+    put_data = {
+        "message": "Update vault state",
+        "content": base64_encode(json.dumps(state, indent=2)),
         "sha": sha
     }
-    requests.put(f"https://api.github.com/repos/{REPO}/contents/{STATE_FILE}", headers=HEADERS, data=json.dumps(body))
+    r = requests.put(get_url, headers=headers, json=put_data)
+    return r.json()
 
-def calculate_portfolio(tokens, prices, holdings, initial_value):
-    total = 0
-    token_data = {}
-    for name in tokens:
-        price = prices[name]['gbp']
-        amount = holdings.get(name, initial_value / len(tokens) / price)
-        token_data[name] = {"price": round(price, 6), "amount": amount}
-        total += amount * price
-    gain = round(((total - initial_value) / initial_value) * 100, 2)
-    return round(total, 2), gain, token_data
+def base64_encode(s):
+    from base64 import b64encode
+    return b64encode(s.encode()).decode()
 
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
-        stable_tokens = ['usde', 'rai', 'frax', 'alusd', 'lusd']
-        heaven_tokens = ['ethena-usde', 'pendle', 'gmx', 'litentry', 'mantle-staked-ether']
-        prices = fetch_prices(stable_tokens + heaven_tokens)
-        state, sha = load_state()
+        state = load_state()
 
-        if not state.get("Stablecoin"):  # Init holdings
-            state["Stablecoin"] = {k: 5000/len(stable_tokens)/prices[k]['gbp'] for k in stable_tokens}
-        if not state.get("Heaven"):
-            state["Heaven"] = {k: 5000/len(heaven_tokens)/prices[k]['gbp'] for k in heaven_tokens}
+        stable_prices = fetch_prices(STABLECOINS)
+        heaven_prices = fetch_prices(HEAVENS)
 
-        stable_total, stable_gain, stable_data = calculate_portfolio(
-            stable_tokens, prices, state["Stablecoin"], 5000)
-        heaven_total, heaven_gain, heaven_data = calculate_portfolio(
-            heaven_tokens, prices, state["Heaven"], 5000)
+        stable_total, stable_values = calculate_value(stable_prices, STABLECOINS, state["Stablecoin"]["allocations"])
+        heaven_total, heaven_values = calculate_value(heaven_prices, HEAVENS, state["Heaven"]["allocations"])
 
-        response = {
+        stable_gain = round(((stable_total - state["Stablecoin"]["initial"])/state["Stablecoin"]["initial"])*100, 2)
+        heaven_gain = round(((heaven_total - state["Heaven"]["initial"])/state["Heaven"]["initial"])*100, 2)
+
+        result = {
             "timestamp": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
             "Stablecoin": {
-                "total": f"£{stable_total}",
-                "gain": stable_gain,
-                "tokens": stable_data
+                "total": f"\u00a3{stable_total:.2f}",
+                "gain": f"{stable_gain}%",
+                "tokens": stable_values
             },
             "Heaven": {
-                "total": f"£{heaven_total}",
-                "gain": heaven_gain,
-                "tokens": heaven_data
+                "total": f"\u00a3{heaven_total:.2f}",
+                "gain": f"{heaven_gain}%",
+                "tokens": heaven_values
             }
         }
 
-        save_state(state, sha)
         self.send_response(200)
-        self.send_header('Content-type','application/json')
+        self.send_header('Content-type', 'application/json')
         self.end_headers()
-        self.wfile.write(json.dumps(response).encode())
+        self.wfile.write(json.dumps(result).encode())
