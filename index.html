@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Daddy's DeFi Vault 💼</title>
+  <style>
+    body {
+      background-color: #0a0a0a;
+      color: #eaeaea;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      padding: 2rem;
+      max-width: 800px;
+      margin: auto;
+    }
+    h1 {
+      color: #00ffc3;
+    }
+    .card {
+      background: #111;
+      padding: 1rem;
+      margin: 1rem 0;
+      border-radius: 8px;
+      border: 1px solid #2c2c2c;
+    }
+    .label {
+      font-weight: bold;
+      color: #ccc;
+    }
+    .value {
+      color: #00ffc3;
+    }
+  </style>
+</head>
+<body>
+  <h1>💼 Daddy's Live DeFi Vault</h1>
+  <p>Updated via <code>/api/update</code></p>
+
+  <div id="output"></div>
+
+  <script>
+    async function fetchVault() {
+      try {
+        const res = await fetch('/api/update');
+        const data = await res.json();
+
+        const output = document.getElementById('output');
+        output.innerHTML = '';
+
+        const createCard = (label, value) => `
+          <div class="card">
+            <div class="label">${label}</div>
+            <div class="value">${value}</div>
+          </div>
+        `;
+
+        output.innerHTML += createCard('Stablecoin Strategy', data["Stablecoin Strategy"]);
+        output.innerHTML += createCard("Heaven's Vault", data["Heaven's Vault"]);
+
+        if (data["Live Prices (GBP)"]) {
+          Object.entries(data["Live Prices (GBP)"]).forEach(([token, price]) => {
+            output.innerHTML += createCard(`${token.toUpperCase()} Price`, `£${price}`);
+          });
+        }
+      } catch (err) {
+        document.getElementById('output').innerHTML = '<p>Error fetching vault data 😢</p>';
+      }
+    }
+
+    fetchVault();
+  </script>
+</body>
+</html>
