@@ -1,103 +1,100 @@
-import json
 import os
+import json
 import requests
 from datetime import datetime
+from http.server import BaseHTTPRequestHandler
 
-STATE_FILE = "/tmp/vault_state.json"
+# GitHub settings
+github_repo = "xak1234/defi-vault-bot"  # change to your repo
+state_file_path = "vault-data/state.json"  # relative path in your repo
+github_token = os.environ.get("GITHUB_TOKEN")
+headers = {
+    "Authorization": f"Bearer {github_token}",
+    "Accept": "application/vnd.github+json"
+}
 
-def load_state():
-    if os.path.exists(STATE_FILE):
-        with open(STATE_FILE, 'r') as f:
-            return json.load(f)
-    return {
-        "Stablecoin": {"initial": 5000, "tokens": {}, "gain": 0},
-        "Heaven": {"initial": 5000, "tokens": {}, "gain": 0}
+def get_github_state():
+    url = f"https://api.github.com/repos/{github_repo}/contents/{state_file_path}"
+    res = requests.get(url, headers=headers)
+    if res.status_code == 200:
+        content = res.json()
+        sha = content['sha']
+        decoded = json.loads(requests.get(content['download_url']).text)
+        return decoded, sha
+    return {}, None
+
+def update_github_state(data, sha):
+    url = f"https://api.github.com/repos/{github_repo}/contents/{state_file_path}"
+    encoded = json.dumps(data, indent=2)
+    payload = {
+        "message": "Update vault state",
+        "content": encoded.encode("utf-8").decode("utf-8"),
+        "sha": sha,
+        "branch": "main"
     }
+    return requests.put(url, headers=headers, data=json.dumps(payload))
 
-def save_state(state):
-    with open(STATE_FILE, 'w') as f:
-        json.dump(state, f)
+def fetch_price(token_id):
+    r = requests.get(f"https://api.coingecko.com/api/v3/simple/price?ids={token_id}&vs_currencies=gbp")
+    return round(r.json()[token_id]['gbp'], 6)
 
-class handler:
-    def __init__(self, *args, **kwargs):
-        pass
-
+class handler(BaseHTTPRequestHandler):
     def do_GET(self):
-        state = load_state()
+        try:
+            state, sha = get_github_state()
 
-        stable_tokens = {
-            'usde': 'ethena-usde',
-            'rai': 'rai',
-            'frax': 'frax',
-            'alusd': 'alchemix-usd',
-            'lusd': 'liquity-usd'
-        }
+            if not state:
+                state = {
+                    "Stablecoin": {
+                        "tokens": {
+                            "usde": {"id": "ethena-usde", "amount": 3238.55},
+                            "rai": {"id": "rai", "amount": 842.67},
+                            "frax": {"id": "frax", "amount": 325.91},
+                            "alusd": {"id": "alchemix-usd", "amount": 593.8},
+                            "lusd": {"id": "liquity-usd", "amount": 584.07}
+                        },
+                        "starting_value": 5000
+                    },
+                    "Heaven": {
+                        "tokens": {
+                            "ethena": {"id": "ethena-usde", "amount": 3238.55},
+                            "pendle": {"id": "pendle", "amount": 842.67},
+                            "gmx": {"id": "gmx", "amount": 325.91},
+                            "lit": {"id": "litentry", "amount": 593.8},
+                            "meth": {"id": "mantle-staked-ether", "amount": 584.07}
+                        },
+                        "starting_value": 5000
+                    }
+                }
 
-        heaven_tokens = {
-            'ethena': 'ethena-usde',
-            'pendle': 'pendle',
-            'gmx': 'gmx',
-            'lit': 'litentry',
-            'meth': 'mantle-staked-ether'
-        }
+            def calculate_portfolio(portfolio):
+                total = 0
+                for k, v in portfolio['tokens'].items():
+                    price = fetch_price(v['id'])
+                    v['price'] = price
+                    v['value'] = round(price * v['amount'], 2)
+                    total += v['value']
+                portfolio['total'] = round(total, 2)
+                portfolio['gain'] = round(((total - portfolio['starting_value']) / portfolio['starting_value']) * 100, 2)
+                return portfolio
 
-        def fetch_prices(token_map):
-            prices = {}
-            for sym, cid in token_map.items():
-                url = f'https://api.coingecko.com/api/v3/simple/price?ids={cid}&vs_currencies=gbp'
-                r = requests.get(url).json()
-                prices[sym] = round(r[cid]['gbp'], 6)
-            return prices
+            stable = calculate_portfolio(state['Stablecoin'])
+            heaven = calculate_portfolio(state['Heaven'])
 
-        now = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
+            # Save new state
+            update_github_state(state, sha)
 
-        stable_prices = fetch_prices(stable_tokens)
-        heaven_prices = fetch_prices(heaven_tokens)
+            # Respond with portfolio data
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps({
+                "timestamp": datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'),
+                "Stablecoin": stable,
+                "Heaven": heaven
+            }).encode())
 
-        # Equal allocation
-        per_stable = state['Stablecoin']['initial'] / len(stable_tokens)
-        per_heaven = state['Heaven']['initial'] / len(heaven_tokens)
-
-        stable_value = 0
-        for sym, price in stable_prices.items():
-            amount = per_stable / price
-            val = amount * price
-            state['Stablecoin']['tokens'][sym] = {'price': price, 'amount': round(amount, 6)}
-            stable_value += val
-
-        heaven_value = 0
-        for sym, price in heaven_prices.items():
-            amount = per_heaven / price
-            val = amount * price
-            state['Heaven']['tokens'][sym] = {'price': price, 'amount': round(amount, 6)}
-            heaven_value += val
-
-        state['Stablecoin']['gain'] = round((stable_value - state['Stablecoin']['initial']) / state['Stablecoin']['initial'] * 100, 2)
-        state['Heaven']['gain'] = round((heaven_value - state['Heaven']['initial']) / state['Heaven']['initial'] * 100, 2)
-
-        response = {
-            "timestamp": now,
-            "Stablecoin": {
-                "total": f"£{stable_value:.2f}",
-                "gain": state['Stablecoin']['gain'],
-                "tokens": {sym: {"price": f"{v['price']:.6f}"} for sym, v in state['Stablecoin']['tokens'].items()}
-            },
-            "Heaven": {
-                "total": f"£{heaven_value:.2f}",
-                "gain": state['Heaven']['gain'],
-                "tokens": {sym: {"price": f"{v['price']:.6f}"} for sym, v in state['Heaven']['tokens'].items()}
-            }
-        }
-
-        save_state(state)
-
-        return {
-            "statusCode": 200,
-            "headers": {"Content-Type": "application/json"},
-            "body": json.dumps(response)
-        }
-
-    def __call__(self, environ, start_response):
-        result = self.do_GET()
-        start_response(f"{result['statusCode']} OK", list(result['headers'].items()))
-        return [result['body'].encode('utf-8')]
+        except Exception as e:
+            self.send_response(500)
+            self.end_headers()
+            self.wfile.write(json.dumps({"error": str(e)}).encode())
