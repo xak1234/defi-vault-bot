@@ -2,86 +2,67 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>DeFi Vault Tracker</title>
+  <script defer src="app.js"></script>
   <style>
-    body { font-family: Arial, sans-serif; padding: 2em; background: #0b0c10; color: #f0f0f0; }
-    .vault { margin-bottom: 2em; border-bottom: 1px solid #333; padding-bottom: 1em; }
-    .token-row { display: flex; justify-content: space-between; padding: 0.3em 0; }
-    .gain { font-weight: bold; }
-    .gain.positive { color: #4aff81; }
-    .gain.negative { color: #ff4e4e; }
+    body {
+      background-color: #0e1117;
+      color: #e6edf3;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      margin: 0;
+      padding: 0;
+    }
+    header {
+      padding: 1rem;
+      text-align: center;
+      background-color: #1f2937;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+    }
+    h1 {
+      font-size: 2rem;
+      color: #38bdf8;
+    }
+    .portfolio-container {
+      display: flex;
+      justify-content: space-around;
+      padding: 2rem;
+      flex-wrap: wrap;
+    }
+    .portfolio {
+      background-color: #1e293b;
+      border-radius: 1rem;
+      padding: 1.5rem;
+      width: 300px;
+      margin: 1rem;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+    }
+    .portfolio h2 {
+      color: #7dd3fc;
+      font-size: 1.5rem;
+    }
+    .asset {
+      display: flex;
+      justify-content: space-between;
+      margin: 0.5rem 0;
+      border-bottom: 1px solid #334155;
+      padding-bottom: 0.3rem;
+    }
   </style>
 </head>
 <body>
-
-  <h1>📊 DeFi Vault Tracker</h1>
-  <div id="timestamp"></div>
-
-  <div class="vault">
-    <h2>Stablecoin Portfolio</h2>
-    <div id="stable-total"></div>
-    <div id="stable-gain" class="gain"></div>
-    <div id="stable-tokens"></div>
+  <header>
+    <h1>📊 DeFi Vault Tracker</h1>
+  </header>
+  <div class="portfolio-container">
+    <div class="portfolio" id="stablecoin">
+      <h2>Stablecoin Portfolio</h2>
+      <div class="assets" id="stablecoin-assets"></div>
+    </div>
+    <div class="portfolio" id="heaven">
+      <h2>Heaven's Vault Portfolio</h2>
+      <div class="assets" id="heaven-assets"></div>
+    </div>
   </div>
-
-  <div class="vault">
-    <h2>Heaven's Vault Portfolio</h2>
-    <div id="heaven-total"></div>
-    <div id="heaven-gain" class="gain"></div>
-    <div id="heaven-tokens"></div>
-  </div>
-
-  <script>
-    async function fetchData() {
-      try {
-        const res = await fetch('/api/update');
-        const data = await res.json();
-
-        if (
-          !data.Stablecoin || !data.Heaven ||
-          data.Stablecoin.total === "£0.00" ||
-          data.Heaven.total === "£0.00"
-        ) {
-          console.warn("Skipping update — invalid data");
-          return;
-        }
-
-        document.getElementById("timestamp").textContent = `Last Updated: ${data.timestamp} UTC`;
-
-        document.getElementById("stable-total").textContent = `Total Value: ${data.Stablecoin.total}`;
-        updateGain("stable-gain", data.Stablecoin.gain);
-        renderTokens("stable-tokens", data.Stablecoin.tokens);
-
-        document.getElementById("heaven-total").textContent = `Total Value: ${data.Heaven.total}`;
-        updateGain("heaven-gain", data.Heaven.gain);
-        renderTokens("heaven-tokens", data.Heaven.tokens);
-      } catch (e) {
-        console.error("Failed to fetch data:", e);
-      }
-    }
-
-    function updateGain(id, gainStr) {
-      const gainEl = document.getElementById(id);
-      gainEl.textContent = `Gain: ${gainStr}`;
-      const gain = parseFloat(gainStr);
-      gainEl.className = 'gain ' + (gain > 0 ? 'positive' : 'negative');
-    }
-
-    function renderTokens(containerId, tokens) {
-      const container = document.getElementById(containerId);
-      container.innerHTML = '';
-      for (const [token, { price, value }] of Object.entries(tokens)) {
-        const row = document.createElement("div");
-        row.className = "token-row";
-        row.innerHTML = `<div>${token.toUpperCase()}</div><div>£${price.toFixed(4)} | Value: £${value.toFixed(2)}</div>`;
-        container.appendChild(row);
-      }
-    }
-
-    fetchData();
-    setInterval(fetchData, 5000);
-  </script>
-
 </body>
 </html>
