@@ -56,4 +56,244 @@
   </style>
 </head>
 <body>
-  <h1>
+  <h1>💼 Daddy's Real DeFi Vault</h1>
+  <div class="timestamp" id="timestamp">Loading...</div>
+
+  <div class="section">
+    <div class="section-title">Stablecoin Portfolio</div>
+    <div id="stable">Loading...</div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Heaven's Vault Portfolio</div>
+    <div id="heaven">Loading...</div>
+  </div>
+
+  <div id="chartContainer">
+    <div class="section-title">Combined Portfolio Performance</div>
+    <canvas id="vaultChart" width="600" height="100"></canvas>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Stablecoin Performance</div>
+    <canvas id="stableChart" width="600" height="100"></canvas>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Heaven's Vault Performance</div>
+    <canvas id="heavenChart" width="600" height="100"></canvas>
+  </div>
+
+  <script>
+    const stableTokens = {
+      'USDE': 'ethena-usde',
+      'RAI': 'rai',
+      'FRAX': 'frax',
+      'ALUSD': 'alchemix-usd',
+      'LUSD': 'liquity-usd'
+    };
+
+    const heavenTokens = {
+      'ETHENA': 'ethena',
+      'PENDLE': 'pendle',
+      'GMX': 'gmx',
+      'LIT': 'litentry',
+      'METH': 'mantle-staked-ether'
+    };
+
+    let previousPrices = {};
+    let holdings = { stable: {}, heaven: {} };
+    let performanceHistory = { stable: [], heaven: [], combined: [] };
+    let chart;
+    let stableChart;
+    let heavenChart;
+
+    function saveHoldings() {
+      const snapshot = {
+        holdings,
+        timestamp: new Date().toISOString(),
+        history: performanceHistory
+      };
+      localStorage.setItem('daddyVaultHoldings', JSON.stringify(snapshot));
+    }
+
+    function loadHoldings() {
+      const saved = localStorage.getItem('daddyVaultHoldings');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        holdings = parsed.holdings || { stable: {}, heaven: {} };
+        performanceHistory = parsed.history || { stable: [], heaven: [], combined: [] };
+      } else {
+        holdings = { stable: {}, heaven: {} };
+        performanceHistory = { stable: [], heaven: [], combined: [] };
+      }
+    }
+
+    async function fetchPrices(tokens) {
+      const ids = [...new Set(Object.values(tokens))].join(',');
+      const url = `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=gbp`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('Price fetch failed');
+      return await res.json();
+    }
+
+    async function update() {
+      const allTokens = { ...stableTokens, ...heavenTokens };
+      const prices = await fetchPrices(allTokens);
+
+      // Update timestamp
+      document.getElementById('timestamp').textContent = new Date().toLocaleString();
+
+      // Update stable section
+      let stableHtml = '';
+      let stableTotal = 0;
+      for (const token in stableTokens) {
+        const id = stableTokens[token];
+        const price = prices[id].gbp;
+        const holding = holdings.stable[token] || 0;
+        const value = holding * price;
+        stableTotal += value;
+        const previousPrice = previousPrices[token] || price;
+        const change = ((price - previousPrice) / previousPrice * 100).toFixed(2);
+        const gainClass = price > previousPrice ? 'positive' : price < previousPrice ? 'negative' : '';
+        const flashClass = price > previousPrice ? 'flash-up' : price < previousPrice ? 'flash-down' : '';
+        stableHtml += `
+          <div class="box ${flashClass}">
+            ${token}: ${holding} tokens @ £${price.toFixed(2)} = £${value.toFixed(2)}
+            <span class="gain ${gainClass}">(${change}%)</span>
+          </div>
+        `;
+        previousPrices[token] = price;
+      }
+      stableHtml += `<div class="box">Total Stablecoin Value: £${stableTotal.toFixed(2)}</div>`;
+      document.getElementById('stable').innerHTML = stableHtml;
+
+      // Update heaven section
+      let heavenHtml = '';
+      let heavenTotal = 0;
+      for (const token in heavenTokens) {
+        const id = heavenTokens[token];
+        const price = prices[id].gbp;
+        const holding = holdings.heaven[token] || 0;
+        const value = holding * price;
+        heavenTotal += value;
+        const previousPrice = previousPrices[token] || price;
+        const change = ((price - previousPrice) / previousPrice * 100).toFixed(2);
+        const gainClass = price > previousPrice ? 'positive' : price < previousPrice ? 'negative' : '';
+        const flashClass = price > previousPrice ? 'flash-up' : price < previousPrice ? 'flash-down' : '';
+        heavenHtml += `
+          <div class="box ${flashClass}">
+            ${token}: ${holding} tokens @ £${price.toFixed(2)} = £${value.toFixed(2)}
+            <span class="gain ${gainClass}">(${change}%)</span>
+          </div>
+        `;
+        previousPrices[token] = price;
+      }
+      heavenHtml += `<div class="box">Total Heaven's Vault Value: £${heavenTotal.toFixed(2)}</div>`;
+      document.getElementById('heaven').innerHTML = heavenHtml;
+
+      // Calculate combined total
+      const combinedTotal = stableTotal + heavenTotal;
+
+      // Update performance history
+      const now = new Date();
+      performanceHistory.stable.push({ timestamp: now, value: stableTotal });
+      performanceHistory.heaven.push({ timestamp: now, value: heavenTotal });
+      performanceHistory.combined.push({ timestamp: now, value: combinedTotal });
+
+      // Limit history to last 100 points
+      if (performanceHistory.stable.length > 100) {
+        performanceHistory.stable.shift();
+        performanceHistory.heaven.shift();
+        performanceHistory.combined.shift();
+      }
+
+      // Update charts
+      updateChart(stableChart, performanceHistory.stable);
+      updateChart(heavenChart, performanceHistory.heaven);
+      updateChart(chart, performanceHistory.combined);
+
+      // Remove flash classes after 1 second
+      setTimeout(() => {
+        document.querySelectorAll('.flash-up, .flash-down').forEach(el => {
+          el.classList.remove('flash-up', 'flash-down');
+        });
+      }, 1000);
+
+      // Save holdings and history
+      saveHoldings();
+    }
+
+    function updateChart(chart, data) {
+      chart.data.datasets[0].data = data.map(d => ({ x: d.timestamp, y: d.value }));
+      chart.update();
+    }
+
+    function initCharts() {
+      const chartOptions = {
+        type: 'line',
+        data: {
+          datasets: [{
+            label: 'Value',
+            data: [],
+            borderColor: '#00ffcc',
+            fill: false
+          }]
+        },
+        options: {
+          scales: {
+            x: {
+              type: 'time',
+              time: {
+                unit: 'minute'
+              }
+            },
+            y: {
+              beginAtZero: false
+            }
+          }
+        }
+      };
+
+      stableChart = new Chart(document.getElementById('stableChart'), {
+        ...chartOptions,
+        data: {
+          ...chartOptions.data,
+          datasets: [{
+            ...chartOptions.data.datasets[0],
+            label: 'Stablecoin Value'
+          }]
+        }
+      });
+
+      heavenChart = new Chart(document.getElementById('heavenChart'), {
+        ...chartOptions,
+        data: {
+          ...chartOptions.data,
+          datasets: [{
+            ...chartOptions.data.datasets[0],
+            label: "Heaven's Vault Value"
+          }]
+        }
+      });
+
+      chart = new Chart(document.getElementById('vaultChart'), {
+        ...chartOptions,
+        data: {
+          ...chartOptions.data,
+          datasets: [{
+            ...chartOptions.data.datasets[0],
+            label: 'Combined Portfolio Value'
+          }]
+        }
+      });
+    }
+
+    // Load holdings and initialize
+    loadHoldings();
+    initCharts();
+    setInterval(update, 10000);
+    update();
+  </script>
+</body>
+</html>
