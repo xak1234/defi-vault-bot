@@ -96,6 +96,55 @@
   </div>
 
   <script>
+const express = require('express');
+const fs = require('fs');
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+app.use(express.json());
+
+// Endpoint to save totals
+app.post('/save-totals', (req, res) => {
+  const { stable, heaven } = req.body;
+  const totals = `Stable: ${stable}\nHeaven: ${heaven}`;
+  fs.writeFile('total', totals, (err) => {
+    if (err) {
+      return res.status(500).send('Failed to save totals');
+    }
+    res.send('Totals saved successfully');
+  });
+});
+
+// Endpoint to load totals
+async function loadTotals() {
+  try {
+    const res = await fetch('/load-totals');
+    if (!res.ok) throw new Error('Failed to load totals');
+    const data = await res.json();
+    return data;
+  } catch (err) {
+    console.error(err);
+    return { stable: 0, heaven: 0 };
+  }
+}
+
+async function initializeVault() {
+  const totals = await loadTotals();
+  document.getElementById('stable').innerHTML = `Total: £${totals.stable.toFixed(2)}`;
+  document.getElementById('heaven').innerHTML = `Total: £${totals.heaven.toFixed(2)}`;
+  
+  // Load any previous state from localStorage
+  loadHoldings();
+  // Kick off the first update
+  updateVault();
+  // Refresh every 30 seconds (adjust as desired)
+  setInterval(updateVault, 30000);
+}
+
+// Initialize the vault
+initializeVault();
+    
+    
     /***************************************************
      * GLOBALS & CONFIG
      ***************************************************/
@@ -182,6 +231,22 @@
       }
     }
 
+
+async function saveTotals(stableTotal, heavenTotal) {
+  const data = {
+    stable: stableTotal,
+    heaven: heavenTotal
+  };
+
+  await fetch('/save-totals', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(data)
+  });
+}
+    
     /***************************************************
      * RENDER & FLASH
      ***************************************************/
@@ -370,66 +435,70 @@
     /***************************************************
      * MAIN UPDATE CYCLE
      ***************************************************/
-    async function updateVault() {
-      try {
-        // Merge token sets
-        const allTokens = { ...stableTokens, ...heavenTokens };
-        const prices = await fetchPrices(allTokens);
+async function updateVault() {
+  try {
+    // Merge token sets
+    const allTokens = { ...stableTokens, ...heavenTokens };
+    const prices = await fetchPrices(allTokens);
 
-        // Initialize holdings if empty
-        if (Object.keys(holdings.stable).length === 0) {
-          initHoldings(stableTokens, START_STABLE, prices, holdings.stable);
-        }
-        if (Object.keys(holdings.heaven).length === 0) {
-          initHoldings(heavenTokens, START_HEAVEN, prices, holdings.heaven);
-        }
-
-        // Render stable portfolio
-        document.getElementById('stable').innerHTML = renderHoldings(
-          stableTokens, prices, holdings.stable, START_STABLE, 'stable'
-        );
-        // Render heaven portfolio
-        document.getElementById('heaven').innerHTML = renderHoldings(
-          heavenTokens, prices, holdings.heaven, START_HEAVEN, 'heaven'
-        );
-
-        // Calculate combined values
-        let stableValue = 0;
-        for (const [symbol, id] of Object.entries(stableTokens)) {
-          const qty = holdings.stable[symbol]?.quantity || 0;
-          const price = prices[id]?.gbp || 0;
-          stableValue += qty * price;
-        }
-
-        let heavenValue = 0;
-        for (const [symbol, id] of Object.entries(heavenTokens)) {
-          const qty = holdings.heaven[symbol]?.quantity || 0;
-          const price = prices[id]?.gbp || 0;
-          heavenValue += qty * price;
-        }
-
-        // Add data point to performanceHistory
-        const now = new Date();
-        performanceHistory.push({
-          time: now, // store actual Date for time-based chart
-          stable: +stableValue.toFixed(2),
-          heaven: +heavenValue.toFixed(2)
-        });
-        if (performanceHistory.length > 200) performanceHistory.shift();
-
-        // Update charts
-        updateChart();
-
-        // Save to localStorage
-        saveHoldings();
-
-        document.getElementById('timestamp').textContent = `Last updated: ${now.toUTCString()}`;
-      } catch (err) {
-        console.error('Vault update failed:', err);
-        document.getElementById('timestamp').textContent = `Last update failed: ${new Date().toUTCString()}`;
-      }
+    // Initialize holdings if empty
+    if (Object.keys(holdings.stable).length === 0) {
+      initHoldings(stableTokens, START_STABLE, prices, holdings.stable);
+    }
+    if (Object.keys(holdings.heaven).length === 0) {
+      initHoldings(heavenTokens, START_HEAVEN, prices, holdings.heaven);
     }
 
+    // Render stable portfolio
+    document.getElementById('stable').innerHTML = renderHoldings(
+      stableTokens, prices, holdings.stable, START_STABLE, 'stable'
+    );
+    // Render heaven portfolio
+    document.getElementById('heaven').innerHTML = renderHoldings(
+      heavenTokens, prices, holdings.heaven, START_HEAVEN, 'heaven'
+    );
+
+    // Calculate combined values
+    let stableValue = 0;
+    for (const [symbol, id] of Object.entries(stableTokens)) {
+      const qty = holdings.stable[symbol]?.quantity || 0;
+      const price = prices[id]?.gbp || 0;
+      stableValue += qty * price;
+    }
+
+    let heavenValue = 0;
+    for (const [symbol, id] of Object.entries(heavenTokens)) {
+      const qty = holdings.heaven[symbol]?.quantity || 0;
+      const price = prices[id]?.gbp || 0;
+      heavenValue += qty * price;
+    }
+
+    // Add data point to performanceHistory
+    const now = new Date();
+    performanceHistory.push({
+      time: now, // store actual Date for time-based chart
+      stable: +stableValue.toFixed(2),
+      heaven: +heavenValue.toFixed(2)
+    });
+    if (performanceHistory.length > 200) performanceHistory.shift();
+
+    // Update charts
+    updateChart();
+
+    // Save to localStorage
+    saveHoldings();
+
+    // Save totals to file
+    await saveTotals(stableValue, heavenValue);
+
+    document.getElementById('timestamp').textContent = `Last updated: ${now.toUTCString()}`;
+  } catch (err) {
+    console.error('Vault update failed:', err);
+    document.getElementById('timestamp').textContent = `Last update failed: ${new Date().toUTCString()}`;
+  }
+}
+
+    
     // Load any previous state from localStorage
     loadHoldings();
     // Kick off the first update
