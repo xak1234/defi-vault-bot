@@ -81,19 +81,27 @@
       'METH': 'mantle-staked-ether'
     };
 
-    async function fetchPrices(tokens) {
-      const ids = Object.values(tokens).join(',');
-      const url = `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=gbp`;
+async function fetchPrices(tokens) {
+  const ids = Object.values(tokens).join(',');
+  const url = `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=gbp`;
 
-      try {
-        const res = await fetch(url);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return await res.json();
-      } catch (err) {
-        console.error("❌ Fetch error:", err);
-        return {}; // Fallback to empty
-      }
-    }
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+
+    // Check if data is valid
+    if (!Object.keys(data).length) throw new Error("Empty price data");
+
+    return data;
+  } catch (err) {
+    console.error("❌ Fetch error:", err);
+    alert("Failed to load token prices from CoinGecko. Using fallback prices (£1.00).");
+    return {}; // fallback triggers £1 price
+  }
+}
+
+
 
     function calculate(tokens, prices, start) {
       const split = start / Object.keys(tokens).length;
