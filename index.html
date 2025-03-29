@@ -70,7 +70,7 @@
 
   <div id="chartContainer">
     <div class="section-title">Combined Portfolio Performance</div>
-    <canvas id="vaultChart" width="400" height="150"></canvas>
+    <canvas id="vaultChart" width="400" height="120"></canvas>
   </div>
 
   <script>
@@ -93,7 +93,6 @@
     let previousPrices = {};
     let holdings = { stable: {}, heaven: {} };
     let performanceHistory = [];
-
     let chart;
 
     function saveHoldings() {
@@ -102,9 +101,7 @@
 
     function loadHoldings() {
       const saved = localStorage.getItem('daddyVaultHoldings');
-      if (saved) {
-        holdings = JSON.parse(saved);
-      }
+      if (saved) holdings = JSON.parse(saved);
     }
 
     async function fetchPrices(tokens) {
@@ -160,7 +157,8 @@
 
     function updateChart() {
       const labels = performanceHistory.map(p => p.time);
-      const data = performanceHistory.map(p => p.total);
+      const stableData = performanceHistory.map(p => p.stable);
+      const heavenData = performanceHistory.map(p => p.heaven);
 
       if (!chart) {
         const ctx = document.getElementById('vaultChart').getContext('2d');
@@ -168,18 +166,31 @@
           type: 'line',
           data: {
             labels: labels,
-            datasets: [{
-              label: 'Total Vault Value',
-              data: data,
-              borderColor: '#00ffcc',
-              backgroundColor: 'rgba(0,255,204,0.1)',
-              tension: 0.2
-            }]
+            datasets: [
+              {
+                label: 'Stablecoin Value',
+                data: stableData,
+                borderColor: '#00aaff',
+                backgroundColor: 'rgba(0,170,255,0.1)',
+                tension: 0.2
+              },
+              {
+                label: "Heaven's Vault Value",
+                data: heavenData,
+                borderColor: '#00ff00',
+                backgroundColor: 'rgba(0,255,0,0.1)',
+                tension: 0.2
+              }
+            ]
           },
           options: {
             scales: {
               x: { display: false },
-              y: { beginAtZero: false }
+              y: {
+                beginAtZero: false,
+                suggestedMin: 9000,
+                suggestedMax: 11000
+              }
             },
             plugins: {
               legend: { labels: { color: '#00ffcc' } }
@@ -188,7 +199,8 @@
         });
       } else {
         chart.data.labels = labels;
-        chart.data.datasets[0].data = data;
+        chart.data.datasets[0].data = stableData;
+        chart.data.datasets[1].data = heavenData;
         chart.update();
       }
     }
@@ -232,7 +244,8 @@
         const now = new Date();
         performanceHistory.push({
           time: now.toLocaleTimeString(),
-          total: +(stableValue + heavenValue).toFixed(2)
+          stable: +stableValue.toFixed(2),
+          heaven: +heavenValue.toFixed(2)
         });
         if (performanceHistory.length > 30) performanceHistory.shift();
         updateChart();
@@ -247,7 +260,7 @@
 
     loadHoldings();
     updateVault();
-    setInterval(updateVault, 50000);
+    setInterval(updateVault, 300000);
   </script>
 </body>
 </html>
