@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>💼 Daddy's Live DeFi Vault</title>
+  <title>💼 Daddy's Real DeFi Vault</title>
   <meta charset="UTF-8">
   <style>
     body {
@@ -76,6 +76,8 @@
 
     let previousPrices = {};
     let lastGoodPrices = {};
+    let stableHoldings = {};
+    let heavenHoldings = {};
 
     async function fetchPrices(tokenMap) {
       const ids = [...new Set(Object.values(tokenMap))].join(',');
@@ -85,33 +87,39 @@
       return res.json();
     }
 
-    function updateBox(id, newPrice) {
+    function initHoldings(tokens, startAmount, prices, store) {
+      const perToken = startAmount / Object.keys(tokens).length;
+      for (const [symbol, id] of Object.entries(tokens)) {
+        const price = prices[id]?.gbp ?? 1;
+        store[symbol] = {
+          priceBought: price,
+          quantity: perToken / price
+        };
+      }
+    }
+
+    function updateBox(id, price) {
       const el = document.getElementById(id);
       if (!el) return;
-
       const prev = previousPrices[id];
 
       if (prev !== undefined) {
-        if (newPrice > prev) el.classList.add("flash-up");
-        else if (newPrice < prev) el.classList.add("flash-down");
-
-        setTimeout(() => {
-          el.classList.remove("flash-up", "flash-down");
-        }, 1500);
+        if (price > prev) el.classList.add("flash-up");
+        else if (price < prev) el.classList.add("flash-down");
+        setTimeout(() => el.classList.remove("flash-up", "flash-down"), 1500);
       }
 
-      el.innerHTML = `£${newPrice.toFixed(6)}`;
-      previousPrices[id] = newPrice;
+      el.innerHTML = `£${price.toFixed(6)}`;
+      previousPrices[id] = price;
     }
 
-    function renderPortfolio(tokens, prices, startAmount, prefix) {
-      const split = startAmount / Object.keys(tokens).length;
+    function renderHoldings(tokens, prices, holdings, startAmount, prefix) {
       let total = 0;
       let html = '';
 
       for (const [symbol, id] of Object.entries(tokens)) {
         const price = prices[id]?.gbp ?? previousPrices[`${prefix}-${symbol}`] ?? 0;
-        const qty = split / (price || 1);
+        const qty = holdings[symbol]?.quantity ?? 0;
         const value = qty * price;
         total += value;
 
@@ -119,7 +127,7 @@
         html += `
           <div class="box">
             ${symbol} Price<br>
-            <div id="${boxId}">£${price ? price.toFixed(6) : '?.??????'}</div>
+            <div id="${boxId}">£${price.toFixed(6)}</div>
           </div>
         `;
 
@@ -128,10 +136,12 @@
 
       const gain = total - startAmount;
       const gainClass = gain >= 0 ? 'positive' : 'negative';
-      html = `<div class="box">Total Value<br>£${total.toFixed(2)}</div>` + html;
-      html += `<div class="gain ${gainClass}">Gain<br>£${gain.toFixed(2)} (${((gain / startAmount) * 100).toFixed(2)}%)</div>`;
 
-      return html;
+      return `
+        <div class="box">Total Value<br>£${total.toFixed(2)}</div>
+        ${html}
+        <div class="gain ${gainClass}">Gain<br>£${gain.toFixed(2)} (${((gain / startAmount) * 100).toFixed(2)}%)</div>
+      `;
     }
 
     async function updateVault() {
@@ -140,23 +150,31 @@
         const prices = await fetchPrices(allTokens);
         lastGoodPrices = prices;
 
-        document.getElementById("stable").innerHTML = renderPortfolio(stableTokens, prices, START_STABLE, "stable");
-        document.getElementById("heaven").innerHTML = renderPortfolio(heavenTokens, prices, START_HEAVEN, "heaven");
+        if (Object.keys(stableHoldings).length === 0) {
+          initHoldings(stableTokens, START_STABLE, prices, stableHoldings);
+          initHoldings(heavenTokens, START_HEAVEN, prices, heavenHoldings);
+        }
+
+        document.getElementById("stable").innerHTML = renderHoldings(stableTokens, prices, stableHoldings, START_STABLE, "stable");
+        document.getElementById("heaven").innerHTML = renderHoldings(heavenTokens, prices, heavenHoldings, START_HEAVEN, "heaven");
+
         document.getElementById("timestamp").textContent = "Last updated: " + new Date().toUTCString();
       } catch (err) {
         console.warn("❌ API failed. Using last good prices.");
-        document.getElementById("stable").innerHTML = renderPortfolio(stableTokens, lastGoodPrices, START_STABLE, "stable");
-        document.getElementById("heaven").innerHTML = renderPortfolio(heavenTokens, lastGoodPrices, START_HEAVEN, "heaven");
-        document.getElementById("timestamp").textContent = "Last updated: " + new Date().toUTCString() + " (cached)";
+        if (Object.keys(lastGoodPrices).length > 0) {
+          document.getElementById("stable").innerHTML = renderHoldings(stableTokens, lastGoodPrices, stableHoldings, START_STABLE, "stable");
+          document.getElementById("heaven").innerHTML = renderHoldings(heavenTokens, lastGoodPrices, heavenHoldings, START_HEAVEN, "heaven");
+          document.getElementById("timestamp").textContent = "Last updated: " + new Date().toUTCString() + " (cached)";
+        }
       }
     }
 
-    setInterval(updateVault, 100000); // Every 5 mins
+    setInterval(updateVault, 300000); // Every 5 mins
     window.onload = updateVault;
   </script>
 </head>
 <body>
-  <h1>💼 Daddy's Live DeFi Vault</h1>
+  <h1>💼 Daddy's Real DeFi Vault</h1>
   <div class="timestamp" id="timestamp">Loading...</div>
 
   <div class="section">
