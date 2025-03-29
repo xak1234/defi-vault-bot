@@ -34,6 +34,7 @@
       margin-bottom: 10px;
       border-radius: 4px;
       border: 1px solid #222;
+      transition: background-color 0.5s ease;
     }
     .gain {
       font-weight: bold;
@@ -45,6 +46,12 @@
     }
     .negative {
       color: #ff4444;
+    }
+    .flash-up {
+      background-color: #003300 !important;
+    }
+    .flash-down {
+      background-color: #330000 !important;
     }
   </style>
   <script>
@@ -67,6 +74,9 @@
       'METH': 'mantle-staked-ether'
     };
 
+    let previousPrices = {};
+    let lastGoodPrices = null;
+
     async function fetchPrices(tokenMap) {
       const ids = [...new Set(Object.values(tokenMap))].join(',');
       const url = `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=gbp`;
@@ -75,7 +85,29 @@
       return res.json();
     }
 
-    function calculatePortfolio(tokens, prices, startAmount) {
+    function updateBox(id, price) {
+      const el = document.getElementById(id);
+      if (!el) return;
+
+      const prev = previousPrices[id];
+
+      if (prev !== undefined) {
+        if (price > prev) {
+          el.classList.add("flash-up");
+        } else if (price < prev) {
+          el.classList.add("flash-down");
+        }
+
+        setTimeout(() => {
+          el.classList.remove("flash-up", "flash-down");
+        }, 1500);
+      }
+
+      el.innerHTML = `£${price.toFixed(6)}`;
+      previousPrices[id] = price;
+    }
+
+    function calculatePortfolio(tokens, prices, startAmount, prefix) {
       const split = startAmount / Object.keys(tokens).length;
       let total = 0;
       const tokenHTML = [];
@@ -86,41 +118,49 @@
         const value = qty * price;
         total += value;
 
+        const boxId = `${prefix}-${symbol}`;
         tokenHTML.push(`
-          <div class="box">${symbol} Price<br>£${price.toFixed(6)}</div>
+          <div class="box">
+            ${symbol} Price<br>
+            <div id="${boxId}">${previousPrices[boxId] ? `£${previousPrices[boxId].toFixed(6)}` : 'Loading...'}</div>
+          </div>
         `);
+
+        setTimeout(() => updateBox(boxId, price), 0);
       }
 
       const gain = total - startAmount;
       const gainClass = gain >= 0 ? 'positive' : 'negative';
 
-      const output = `
+      return `
         <div class="box">Total Value<br>£${total.toFixed(2)}</div>
         ${tokenHTML.join('')}
         <div class="gain ${gainClass}">Gain<br>£${gain.toFixed(2)} (${((gain / startAmount) * 100).toFixed(2)}%)</div>
       `;
-      return output;
     }
 
     async function updateVault() {
       try {
         const allTokens = { ...stableTokens, ...heavenTokens };
         const prices = await fetchPrices(allTokens);
+        lastGoodPrices = prices;
 
-        const stableOutput = calculatePortfolio(stableTokens, prices, START_STABLE);
-        const heavenOutput = calculatePortfolio(heavenTokens, prices, START_HEAVEN);
+        document.getElementById("stable").innerHTML = calculatePortfolio(stableTokens, prices, START_STABLE, "stable");
+        document.getElementById("heaven").innerHTML = calculatePortfolio(heavenTokens, prices, START_HEAVEN, "heaven");
 
-        document.getElementById("stable").innerHTML = stableOutput;
-        document.getElementById("heaven").innerHTML = heavenOutput;
         document.getElementById("timestamp").textContent = "Last updated: " + new Date().toUTCString();
       } catch (err) {
-        document.getElementById("stable").innerHTML = "<p style='color:red;'>❌ Failed to load data.</p>";
-        document.getElementById("heaven").innerHTML = "";
-        console.error(err);
+        console.warn("🛑 Price fetch failed. Keeping previous display:", err.message);
+        if (!lastGoodPrices) return; // do nothing on first run fail
+
+        // fallback to last known prices if available
+        document.getElementById("stable").innerHTML = calculatePortfolio(stableTokens, lastGoodPrices, START_STABLE, "stable");
+        document.getElementById("heaven").innerHTML = calculatePortfolio(heavenTokens, lastGoodPrices, START_HEAVEN, "heaven");
+        document.getElementById("timestamp").textContent = "Last updated: " + new Date().toUTCString() + " (cached)";
       }
     }
 
-    setInterval(updateVault, 300000); // Refresh every 5 minutes
+    setInterval(updateVault, 300000); // Every 5 minutes
     window.onload = updateVault;
   </script>
 </head>
