@@ -1,91 +1,79 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Daddy’s Live DeFi Vault</title>
-  <style>
-    body {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background: #000;
-      color: #00ffe7;
-      padding: 2rem;
+<script>
+  const START_STABLE = 5000;
+  const START_HEAVEN = 5000;
+
+  const stableTokens = {
+    'USDE': 'ethena-usde',
+    'RAI': 'rai',
+    'FRAX': 'frax',
+    'ALUSD': 'alchemix-usd',
+    'LUSD': 'liquity-usd'
+  };
+
+  const heavenTokens = {
+    'ETHENA': 'ethena-usde',
+    'PENDLE': 'pendle',
+    'GMX': 'gmx',
+    'LIT': 'litentry',
+    'METH': 'mantle-staked-ether'
+  };
+
+  async function fetchPrices(tokens) {
+    const ids = Object.values(tokens).join(',');
+    const url = `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=gbp`;
+
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return await res.json();
+    } catch (err) {
+      console.error("❌ Failed to fetch prices:", err);
+      return {}; // Return empty object as fallback
+    }
+  }
+
+  function calculate(tokens, prices, start) {
+    const split = start / Object.keys(tokens).length;
+    let total = 0;
+    const tokenHTML = [];
+
+    for (const [symbol, id] of Object.entries(tokens)) {
+      const price = prices[id]?.gbp ?? 1; // Fallback to £1
+      const qty = split / price;
+      const value = qty * price;
+      total += value;
+
+      tokenHTML.push(`
+        <div class="box">${symbol} Price<br>£${price.toFixed(6)}</div>
+      `);
     }
 
-    h1 {
-      color: #00ffe7;
-      font-size: 2rem;
-    }
+    const gain = total - start;
+    const gainClass = gain >= 0 ? 'positive' : 'negative';
+    const totalBox = `<div class="box">Total Value<br>£${total.toFixed(2)}</div>`;
+    const gainBox = `<div class="gain ${gainClass}">Gain<br>£${gain.toFixed(2)}</div>`;
 
-    h2 {
-      color: #00ffe7;
-      margin-top: 2rem;
-    }
+    return totalBox + tokenHTML.join('') + gainBox;
+  }
 
-    .portfolio {
-      margin-bottom: 3rem;
-      border-radius: 6px;
-    }
+  async function updateVault() {
+    const stablePrices = await fetchPrices(stableTokens);
+    const heavenPrices = await fetchPrices(heavenTokens);
 
-    .box {
-      background: #111;
-      padding: 1rem;
-      margin-bottom: 0.75rem;
-      border-radius: 5px;
-    }
+    console.log("🔁 Stable prices:", stablePrices);
+    console.log("🔁 Heaven prices:", heavenPrices);
 
-    .label {
-      font-weight: bold;
-      color: #ccc;
-    }
+    const stableHTML = calculate(stableTokens, stablePrices, START_STABLE);
+    const heavenHTML = calculate(heavenTokens, heavenPrices, START_HEAVEN);
 
-    .value {
-      display: block;
-      margin-top: 0.25rem;
-      color: #76f8ff;
-    }
+    document.getElementById("stable").innerHTML = stableHTML;
+    document.getElementById("heaven").innerHTML = heavenHTML;
 
-    .gain-positive {
-      color: #4aff81;
-    }
+    const now = new Date().toUTCString();
+    document.getElementById("timestamp").textContent = `Last updated: ${now}`;
+  }
 
-    .gain-negative {
-      color: #ff4e4e;
-    }
-
-    #timestamp {
-      color: #ccc;
-      font-size: 0.9rem;
-      margin-bottom: 1rem;
-    }
-  </style>
-</head>
-<body>
-
-  <h1>💼 Daddy's Live DeFi Vault</h1>
-  <div id="timestamp">Updated via <code>/api/update</code></div>
-
-  <div class="portfolio" id="stablecoin">
-    <h2>💠 Stablecoin Portfolio</h2>
-    <div class="box"><span class="label">Total Value</span><span id="stable-total" class="value">£0.00</span></div>
-    <div class="box"><span class="label">USDE Price</span><span id="stable-usde" class="value">£0.00</span></div>
-    <div class="box"><span class="label">SDAI Price</span><span id="stable-sdai" class="value">£0.00</span></div>
-    <div class="box"><span class="label">MIMATIC Price</span><span id="stable-mimatic" class="value">£0.00</span></div>
-    <div class="box"><span class="label">MUSD Price</span><span id="stable-musd" class="value">£0.00</span></div>
-    <div class="box"><span class="label">GDAI Price</span><span id="stable-gdai" class="value">£0.00</span></div>
-    <div class="box"><span class="label">Stablecoin Gain</span><span id="stable-gain" class="value gain-positive">0%</span></div>
-  </div>
-
-  <div class="portfolio" id="heaven">
-    <h2>🌌 Heaven's Vault Portfolio</h2>
-    <div class="box"><span class="label">Total Value</span><span id="heaven-total" class="value">£0.00</span></div>
-    <div class="box"><span class="label">ETHENA Price</span><span id="heaven-ethena" class="value">£0.00</span></div>
-    <div class="box"><span class="label">PENDLE Price</span><span id="heaven-pendle" class="value">£0.00</span></div>
-    <div class="box"><span class="label">GMX Price</span><span id="heaven-gmx" class="value">£0.00</span></div>
-    <div class="box"><span class="label">LIT Price</span><span id="heaven-lit" class="value">£0.00</span></div>
-    <div class="box"><span class="label">METH Price</span><span id="heaven-meth" class="value">£0.00</span></div>
-    <div class="box"><span class="label">Heaven's Vault Gain</span><span id="heaven-gain" class="value gain-positive">0%</span></div>
-  </div>
-
-</body>
-</html>
+  // First load + refresh every 60 seconds
+  setInterval(updateVault, 60000);
+  window.onload = updateVault;
+</script>
