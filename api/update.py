@@ -67,7 +67,7 @@
       }
     }
 
-    setInterval(loadData, 60000); // Refresh every 60 seconds
+    setInterval(loadData, 20000); // Refresh every 60 seconds
     window.onload = loadData;
   </script>
 </head>
