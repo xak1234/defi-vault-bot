@@ -1,230 +1,101 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <title>💼 Daddy's Live DeFi Vault</title>
-  <meta charset="UTF-8">
-  <style>
-    body {
-      background: #0d0d0d;
-      color: #00ffcc;
-      font-family: monospace;
-      padding: 20px;
+<!-- ✂️ Only the edited/added parts shown for brevity -->
+
+<!-- Inside <body> -->
+<div class="section">
+  <div class="section-title">Heaven's Vault Portfolio</div>
+  <div id="heaven">Loading...</div>
+</div>
+
+<div class="section">
+  <div class="section-title">🏆 Winnings</div>
+  <div id="winnings">£0.00</div>
+</div>
+
+<script>
+  const START_STABLE = 5000;
+  let startHeaven = 5000;
+  let winnings = 0;
+
+  const stableTokens = {
+    'USDE': 'ethena-usde',
+    'RAI': 'rai',
+    'FRAX': 'frax',
+    'ALUSD': 'alchemix-usd',
+    'LUSD': 'liquity-usd'
+  };
+
+  const heavenTokens = {
+    'ETHENA': 'ethena-usde',
+    'PENDLE': 'pendle',
+    'GMX': 'gmx',
+    'LIT': 'litentry',
+    'METH': 'mantle-staked-ether'
+  };
+
+  async function fetchPrices(tokens) {
+    const ids = Object.values(tokens).join(',');
+    const url = `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=gbp`;
+
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      if (!Object.keys(data).length) throw new Error("Empty price data");
+      return data;
+    } catch (err) {
+      console.error("❌ Fetch error:", err);
+      alert("Failed to load token prices from CoinGecko. Using fallback prices (£1.00).");
+      return {};
     }
-    h1 {
-      color: #00ffff;
-    }
-    .timestamp {
-      font-size: 12px;
-      color: #aaa;
-      margin-bottom: 20px;
-    }
-    .section {
-      margin-bottom: 40px;
-    }
-    .section-title {
-      font-size: 16px;
-      font-weight: bold;
-      color: #00ffff;
-      margin-bottom: 10px;
-    }
-    .box {
-      background: #111;
-      padding: 10px;
-      margin-bottom: 10px;
-      border-radius: 4px;
-      border: 1px solid #222;
-    }
-    .gain {
-      font-weight: bold;
-      color: #00ffcc;
-      margin-top: 10px;
-    }
-    .positive {
-      color: #00ff00;
-    }
-    .negative {
-      color: #ff4444;
-    }
-  </style>
-<style>
-  .toilet-flush {
-    display: none;
-    text-align: center;
-    font-size: 40px;
-    margin-bottom: 20px;
-    animation: flush 1s infinite alternate;
   }
-  @keyframes flush {
-    0% { transform: translateY(0); }
-    100% { transform: translateY(5px); }
+
+  function calculate(tokens, prices, start, label) {
+    const split = start / Object.keys(tokens).length;
+    let total = 0;
+    const html = [];
+
+    for (const [symbol, id] of Object.entries(tokens)) {
+      const price = prices[id]?.gbp ?? 1;
+      const qty = split / price;
+      const value = qty * price;
+      total += value;
+      html.push(`<div class="box">${symbol} Price<br>£${price.toFixed(6)}</div>`);
+    }
+
+    const gain = total - start;
+    const gainClass = gain >= 0 ? 'positive' : 'negative';
+    return {
+      html: `
+        <div class="box">Total Value<br>£${total.toFixed(2)}</div>
+        ${html.join('')}
+        <div class="gain ${gainClass}">Gain<br>£${gain.toFixed(2)}</div>
+      `,
+      total,
+      gain
+    };
   }
-</style>
-</head>
-<body>
-  <div id="toilet" class="toilet-flush">🚽 Flushing losses...</div>
-  <h1>💼 Daddy's Live DeFi Vault</h1>
-  <div class="timestamp" id="timestamp">Loading...</div>
 
-  <div class="section">
-    <div class="section-title">Stablecoin Portfolio</div>
-    <div id="stable">Loading...</div>
-  </div>
-
-  <div class="section">
-    <div class="section-title">Heaven's Vault Portfolio</div>
-    <div id="heaven">Loading...</div>
-  </div>
-
-  <div class="section">
-    <div class="section-title">🏆 Winnings</div>
-    <div id="winnings">£0.00</div>
-  </div>
-
-  <button onclick="resetWinnings()" style="background:#222;color:#00ffff;border:1px solid #00cccc;padding:5px 10px;margin-top:20px;">Reset Winnings</button>
-
-  <script>
-    let winnings = parseFloat(localStorage.getItem("winnings")) || 0;
-    let startHeaven = parseFloat(localStorage.getItem("startHeaven"));
-    if (isNaN(startHeaven)) startHeaven = 5000;
-
-    const START_STABLE = 5000;
-
-    const stableTokens = {
-      'USDE': 'ethena-usde',
-      'RAI': 'rai',
-      'FRAX': 'frax',
-      'ALUSD': 'alchemix-usd',
-      'LUSD': 'liquity-usd'
-    };
-
-    const heavenTokens = {
-      'ETHENA': 'ethena-usde',
-      'PENDLE': 'pendle',
-      'GMX': 'gmx',
-      'LIT': 'litentry',
-      'METH': 'mantle-staked-ether'
-    };
-
-    const debugBox = document.createElement('div');
-    debugBox.style.fontSize = '12px';
-    debugBox.style.color = '#888';
-    debugBox.style.marginTop = '20px';
-    document.body.appendChild(debugBox);
-
-    async function fetchPrices(tokens) {
-      const ids = Object.values(tokens).join(',');
-      const url = `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=gbp`;
-
-      try {
-        const res = await fetch(url);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-        if (!Object.keys(data).length) throw new Error("Empty price data");
-        return data;
-      } catch (err) {
-        console.error("❌ Fetch error:", err);
-        return null;
-      }
-    }
-
-    function calculate(tokens, prices, start, label) {
-      const split = start / Object.keys(tokens).length;
-      let total = 0;
-      const html = [];
-
-      for (const [symbol, id] of Object.entries(tokens)) {
-        const price = prices && prices[id]?.gbp;
-        if (price) {
-          const qty = split / price;
-          const value = qty * price;
-          total += value;
-          html.push(`<div class="box">${symbol} Price<br>£${price.toFixed(6)}</div>`);
-        } else {
-          html.push(`<div class="box">${symbol} Price<br>Unavailable</div>`);
-        }
-      }
-
-      const gain = total - start;
-      const gainClass = gain >= 0 ? 'positive' : 'negative';
-      return {
-        html: `
-          <div class="box">Total Value<br>£${total.toFixed(2)}</div>
-          ${html.join('')}
-          <div class="gain ${gainClass}">Gain<br>£${gain.toFixed(2)}</div>
-        `,
-        total,
-        gain
-      };
-    }
-
-    async function updateVault() {
-  try {
+  async function updateVault() {
     const stablePrices = await fetchPrices(stableTokens);
     const heavenPrices = await fetchPrices(heavenTokens);
-
-    if (!stablePrices || !heavenPrices) {
-      debugBox.innerText = '⚠️ Failed to fetch prices. Retaining previous values.';
-      return;
-    }
 
     const stableData = calculate(stableTokens, stablePrices, START_STABLE, "Stablecoin");
     const heavenData = calculate(heavenTokens, heavenPrices, startHeaven, "Heaven");
 
+    // Auto-move profits if Heaven's Vault gain >= £50
     if (heavenData.gain >= 50) {
       winnings += heavenData.gain;
-      startHeaven = heavenData.total;
-      localStorage.setItem("winnings", winnings.toFixed(2));
-      localStorage.setItem("startHeaven", heavenData.total.toFixed(2));
-      console.log(`🎉 Winnings triggered: +£${heavenData.gain.toFixed(2)}`);
+      startHeaven = heavenData.total; // reset baseline to current
     }
 
     document.getElementById("stable").innerHTML = stableData.html;
     document.getElementById("heaven").innerHTML = heavenData.html;
     document.getElementById("winnings").innerHTML = `£${winnings.toFixed(2)}`;
     document.getElementById("timestamp").textContent = "Last updated: " + new Date().toUTCString();
-
-    // Show toilet animation if either vault is negative
-    const toilet = document.getElementById("toilet");
-    if (stableData.gain < 0 || heavenData.gain < 0) {
-      toilet.style.display = 'block';
-    } else {
-      toilet.style.display = 'none';
-    }
-
-    debugBox.innerText = '✅ Prices loaded and vaults updated successfully.';
-  } catch (e) {
-    console.error('🔥 updateVault() error:', e);
-    debugBox.innerText = '⚠️ Failed to load data. Try again later.';
-    document.getElementById("heaven").innerHTML = '<div class="box">Failed to load Heaven’s Vault data.</div>';
   }
-}`);
-        }
 
-        document.getElementById("stable").innerHTML = stableData.html;
-        document.getElementById("heaven").innerHTML = heavenData.html;
-        document.getElementById("winnings").innerHTML = `£${winnings.toFixed(2)}`;
-        document.getElementById("timestamp").textContent = "Last updated: " + new Date().toUTCString();
-
-        debugBox.innerText = '✅ Prices loaded and vaults updated successfully.';
-      } catch (e) {
-        console.error('🔥 updateVault() error:', e);
-        debugBox.innerText = '⚠️ Failed to load data. Try again later.';
-        document.getElementById("heaven").innerHTML = '<div class="box">Failed to load Heaven’s Vault data.</div>';
-      }
-    }
-
-    function resetWinnings() {
-      winnings = 0;
-      startHeaven = 5000;
-      localStorage.removeItem("winnings");
-      localStorage.removeItem("startHeaven");
-      updateVault();
-    }
-
-    document.addEventListener('DOMContentLoaded', () => {
-      updateVault();
-      setInterval(updateVault, 5000);
-    });
-  </script>
-</body>
-</html>
+  document.addEventListener('DOMContentLoaded', () => {
+    updateVault();
+    setInterval(updateVault, 5000);
+  });
+</script>
