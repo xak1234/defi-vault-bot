@@ -3,7 +3,6 @@
 <head>
   <title>💼 Daddy's Live DeFi Vault</title>
   <meta charset="UTF-8">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     body {
       background: #0d0d0d;
@@ -67,15 +66,14 @@
     <div id="winnings">£0.00</div>
   </div>
 
-  <canvas id="heavenChart" width="200" height="100"></canvas>
-  <canvas id="stableChart" width="200" height="100"></canvas>
-
   <button onclick="resetWinnings()" style="background:#222;color:#00ffff;border:1px solid #00cccc;padding:5px 10px;margin-top:20px;">Reset Winnings</button>
 
   <script>
-    const START_STABLE = 5000;
     let winnings = parseFloat(localStorage.getItem("winnings")) || 0;
-    let startHeaven = parseFloat(localStorage.getItem("startHeaven")) || 5000;
+    let startHeaven = parseFloat(localStorage.getItem("startHeaven"));
+    if (isNaN(startHeaven)) startHeaven = 5000;
+
+    const START_STABLE = 5000;
 
     const stableTokens = {
       'USDE': 'ethena-usde',
@@ -99,9 +97,6 @@
     debugBox.style.marginTop = '20px';
     document.body.appendChild(debugBox);
 
-    let heavenHistory = [];
-    let stableHistory = [];
-
     async function fetchPrices(tokens) {
       const ids = Object.values(tokens).join(',');
       const url = `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=gbp`;
@@ -114,7 +109,7 @@
         return data;
       } catch (err) {
         console.error("❌ Fetch error:", err);
-        return {};
+        return null;
       }
     }
 
@@ -124,11 +119,15 @@
       const html = [];
 
       for (const [symbol, id] of Object.entries(tokens)) {
-        const price = prices[id]?.gbp ?? 1;
-        const qty = split / price;
-        const value = qty * price;
-        total += value;
-        html.push(`<div class="box">${symbol} Price<br>£${price.toFixed(6)}</div>`);
+        const price = prices && prices[id]?.gbp;
+        if (price) {
+          const qty = split / price;
+          const value = qty * price;
+          total += value;
+          html.push(`<div class="box">${symbol} Price<br>£${price.toFixed(6)}</div>`);
+        } else {
+          html.push(`<div class="box">${symbol} Price<br>Unavailable</div>`);
+        }
       }
 
       const gain = total - start;
@@ -143,54 +142,6 @@
         gain
       };
     }
-
-    function updateChart(chart, label, data) {
-      chart.data.labels.push(label);
-      chart.data.datasets[0].data.push(data);
-      if (chart.data.labels.length > 20) {
-        chart.data.labels.shift();
-        chart.data.datasets[0].data.shift();
-      }
-      chart.update();
-    }
-
-    let heavenChart = new Chart(document.getElementById('heavenChart').getContext('2d'), {
-      type: 'line',
-      data: {
-        labels: [],
-        datasets: [{
-          label: "Heaven's Vault (£)",
-          borderColor: '#ff00ff',
-          data: []
-        }]
-      },
-      options: {
-        plugins: { legend: { labels: { color: '#00ffff' } } },
-        scales: {
-          x: { ticks: { color: '#888' } },
-          y: { ticks: { color: '#888' } }
-        }
-      }
-    });
-
-    let stableChart = new Chart(document.getElementById('stableChart').getContext('2d'), {
-      type: 'line',
-      data: {
-        labels: [],
-        datasets: [{
-          label: "Stablecoin Vault (£)",
-          borderColor: '#00ffcc',
-          data: []
-        }]
-      },
-      options: {
-        plugins: { legend: { labels: { color: '#00ffff' } } },
-        scales: {
-          x: { ticks: { color: '#888' } },
-          y: { ticks: { color: '#888' } }
-        }
-      }
-    });
 
     async function updateVault() {
       try {
@@ -213,9 +164,6 @@
         document.getElementById("winnings").innerHTML = `£${winnings.toFixed(2)}`;
         document.getElementById("timestamp").textContent = "Last updated: " + new Date().toUTCString();
 
-        updateChart(heavenChart, new Date().toLocaleTimeString(), heavenData.total);
-        updateChart(stableChart, new Date().toLocaleTimeString(), stableData.total);
-
         debugBox.innerText = '✅ Prices loaded and vaults updated successfully.';
       } catch (e) {
         console.error('🔥 updateVault() error:', e);
@@ -234,7 +182,7 @@
 
     document.addEventListener('DOMContentLoaded', () => {
       updateVault();
-      setInterval(updateVault, 1000);
+      setInterval(updateVault, 5000);
     });
   </script>
 </body>
