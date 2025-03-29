@@ -1,79 +1,138 @@
-<script>
-  const START_STABLE = 5000;
-  const START_HEAVEN = 5000;
-
-  const stableTokens = {
-    'USDE': 'ethena-usde',
-    'RAI': 'rai',
-    'FRAX': 'frax',
-    'ALUSD': 'alchemix-usd',
-    'LUSD': 'liquity-usd'
-  };
-
-  const heavenTokens = {
-    'ETHENA': 'ethena-usde',
-    'PENDLE': 'pendle',
-    'GMX': 'gmx',
-    'LIT': 'litentry',
-    'METH': 'mantle-staked-ether'
-  };
-
-  async function fetchPrices(tokens) {
-    const ids = Object.values(tokens).join(',');
-    const url = `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=gbp`;
-
-    try {
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return await res.json();
-    } catch (err) {
-      console.error("❌ Failed to fetch prices:", err);
-      return {}; // Return empty object as fallback
+<!DOCTYPE html>
+<html>
+<head>
+  <title>💼 Daddy's Live DeFi Vault</title>
+  <meta charset="UTF-8">
+  <style>
+    body {
+      background: #0d0d0d;
+      color: #00ffcc;
+      font-family: monospace;
+      padding: 20px;
     }
-  }
+    h1 {
+      color: #00ffff;
+    }
+    .timestamp {
+      font-size: 12px;
+      color: #aaa;
+      margin-bottom: 20px;
+    }
+    .section {
+      margin-bottom: 40px;
+    }
+    .section-title {
+      font-size: 16px;
+      font-weight: bold;
+      color: #00ffff;
+      margin-bottom: 10px;
+    }
+    .box {
+      background: #111;
+      padding: 10px;
+      margin-bottom: 10px;
+      border-radius: 4px;
+      border: 1px solid #222;
+    }
+    .gain {
+      font-weight: bold;
+      color: #00ffcc;
+      margin-top: 10px;
+    }
+    .positive {
+      color: #00ff00;
+    }
+    .negative {
+      color: #ff4444;
+    }
+  </style>
+</head>
+<body>
+  <h1>💼 Daddy's Live DeFi Vault</h1>
+  <div class="timestamp" id="timestamp">Loading...</div>
 
-  function calculate(tokens, prices, start) {
-    const split = start / Object.keys(tokens).length;
-    let total = 0;
-    const tokenHTML = [];
+  <div class="section">
+    <div class="section-title">Stablecoin Portfolio</div>
+    <div id="stable">Loading...</div>
+  </div>
 
-    for (const [symbol, id] of Object.entries(tokens)) {
-      const price = prices[id]?.gbp ?? 1; // Fallback to £1
-      const qty = split / price;
-      const value = qty * price;
-      total += value;
+  <div class="section">
+    <div class="section-title">Heaven's Vault Portfolio</div>
+    <div id="heaven">Loading...</div>
+  </div>
 
-      tokenHTML.push(`
-        <div class="box">${symbol} Price<br>£${price.toFixed(6)}</div>
-      `);
+  <script>
+    const START_STABLE = 5000;
+    const START_HEAVEN = 5000;
+
+    const stableTokens = {
+      'USDE': 'ethena-usde',
+      'RAI': 'rai',
+      'FRAX': 'frax',
+      'ALUSD': 'alchemix-usd',
+      'LUSD': 'liquity-usd'
+    };
+
+    const heavenTokens = {
+      'ETHENA': 'ethena-usde',
+      'PENDLE': 'pendle',
+      'GMX': 'gmx',
+      'LIT': 'litentry',
+      'METH': 'mantle-staked-ether'
+    };
+
+    async function fetchPrices(tokens) {
+      const ids = Object.values(tokens).join(',');
+      const url = `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=gbp`;
+
+      try {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return await res.json();
+      } catch (err) {
+        console.error("❌ Fetch error:", err);
+        return {}; // Fallback to empty
+      }
     }
 
-    const gain = total - start;
-    const gainClass = gain >= 0 ? 'positive' : 'negative';
-    const totalBox = `<div class="box">Total Value<br>£${total.toFixed(2)}</div>`;
-    const gainBox = `<div class="gain ${gainClass}">Gain<br>£${gain.toFixed(2)}</div>`;
+    function calculate(tokens, prices, start) {
+      const split = start / Object.keys(tokens).length;
+      let total = 0;
+      const html = [];
 
-    return totalBox + tokenHTML.join('') + gainBox;
-  }
+      for (const [symbol, id] of Object.entries(tokens)) {
+        const price = prices[id]?.gbp ?? 1; // fallback
+        const qty = split / price;
+        const value = qty * price;
+        total += value;
 
-  async function updateVault() {
-    const stablePrices = await fetchPrices(stableTokens);
-    const heavenPrices = await fetchPrices(heavenTokens);
+        html.push(`<div class="box">${symbol} Price<br>£${price.toFixed(6)}</div>`);
+      }
 
-    console.log("🔁 Stable prices:", stablePrices);
-    console.log("🔁 Heaven prices:", heavenPrices);
+      const gain = total - start;
+      const gainClass = gain >= 0 ? 'positive' : 'negative';
 
-    const stableHTML = calculate(stableTokens, stablePrices, START_STABLE);
-    const heavenHTML = calculate(heavenTokens, heavenPrices, START_HEAVEN);
+      return `
+        <div class="box">Total Value<br>£${total.toFixed(2)}</div>
+        ${html.join('')}
+        <div class="gain ${gainClass}">Gain<br>£${gain.toFixed(2)}</div>
+      `;
+    }
 
-    document.getElementById("stable").innerHTML = stableHTML;
-    document.getElementById("heaven").innerHTML = heavenHTML;
+    async function updateVault() {
+      const stablePrices = await fetchPrices(stableTokens);
+      const heavenPrices = await fetchPrices(heavenTokens);
 
-    const now = new Date().toUTCString();
-    document.getElementById("timestamp").textContent = `Last updated: ${now}`;
-  }
+      document.getElementById("stable").innerHTML = calculate(stableTokens, stablePrices, START_STABLE);
+      document.getElementById("heaven").innerHTML = calculate(heavenTokens, heavenPrices, START_HEAVEN);
+      document.getElementById("timestamp").textContent = "Last updated: " + new Date().toUTCString();
+    }
 
-  // First load + refresh every 60 seconds
-  setInterval(updateVault, 60000);
-  window.onload = updateVault;
-</script>
+    // Load everything after DOM is ready
+    document.addEventListener('DOMContentLoaded', () => {
+      updateVault();
+      setInterval(updateVault, 60000);
+    });
+  </script>
+</body>
+</html>
