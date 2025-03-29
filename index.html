@@ -257,8 +257,8 @@
     async function fetchPrices(tokens) {
       const ids = [...new Set(Object.values(tokens))].join(',');
       const coingeckoUrl = `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=gbp`;
-      const coinpaprikaUrl = `https://api.coinpaprika.com/v1/tickers`;
-      const cryptocompareUrl = `https://min-api.cryptocompare.com/data/pricemulti?fsyms=${Object.keys(tokens).join(',')}&tsyms=GBP`;
+     # const coinpaprikaUrl = `https://api.coinpaprika.com/v1/tickers`;
+     # const cryptocompareUrl = `https://min-api.cryptocompare.com/data/pricemulti?fsyms=${Object.keys(tokens).join(',')}&tsyms=GBP`;
 
       try {
         const res = await fetch(coingeckoUrl);
