@@ -255,47 +255,12 @@
     }
 
     async function fetchPrices(tokens) {
-      const ids = [...new Set(Object.values(tokens))].join(',');
-      const coingeckoUrl = `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=gbp`;
-     # const coinpaprikaUrl = `https://api.coinpaprika.com/v1/tickers`;
-     # const cryptocompareUrl = `https://min-api.cryptocompare.com/data/pricemulti?fsyms=${Object.keys(tokens).join(',')}&tsyms=GBP`;
-
-      try {
-        const res = await fetch(coingeckoUrl);
-        if (!res.ok) throw new Error('Primary source failed');
-        return await res.json();
-      } catch (e1) {
-        console.warn('CoinGecko failed, trying CoinPaprika...', e1);
-        try {
-          const res2 = await fetch(coinpaprikaUrl);
-          if (!res2.ok) throw new Error('CoinPaprika source failed');
-          const data = await res2.json();
-          let result = {};
-          for (const [symbol, id] of Object.entries(tokens)) {
-            const token = data.find(t => t.id === id || t.symbol.toLowerCase() === symbol.toLowerCase());
-            if (token) {
-              result[id] = { gbp: token.quotes?.GBP?.price || token.quotes?.USD?.price || 0 };
-            }
-          }
-          return result;
-        } catch (e2) {
-          console.warn('CoinPaprika failed, trying CryptoCompare...', e2);
-          try {
-            const res3 = await fetch(cryptocompareUrl);
-            if (!res3.ok) throw new Error('CryptoCompare failed');
-            const data3 = await res3.json();
-            let result = {};
-            for (const [symbol, id] of Object.entries(tokens)) {
-              const symbolUpper = symbol.toUpperCase();
-              if (data3[symbolUpper]?.GBP) {
-                result[id] = { gbp: data3[symbolUpper].GBP };
-              }
-            }
-            return result;
-          } catch (e3) {
-            console.error('All price sources failed:', e3);
-            throw new Error('Price fetch failed from all sources');
-          }
+  const ids = [...new Set(Object.values(tokens))].join(',');
+  const url = `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=gbp`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('Price fetch failed');
+  return await res.json();
+}
         }
       }
     }
