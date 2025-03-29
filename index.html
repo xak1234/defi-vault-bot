@@ -67,8 +67,8 @@
     <div id="winnings">£0.00</div>
   </div>
 
-  <canvas id="heavenChart" width="600" height="200"></canvas>
-  <canvas id="stableChart" width="600" height="200"></canvas>
+  <canvas id="heavenChart" width="200" height="100"></canvas>
+  <canvas id="stableChart" width="200" height="100"></canvas>
 
   <button onclick="resetWinnings()" style="background:#222;color:#00ffff;border:1px solid #00cccc;padding:5px 10px;margin-top:20px;">Reset Winnings</button>
 
@@ -234,7 +234,7 @@
 
     document.addEventListener('DOMContentLoaded', () => {
       updateVault();
-      setInterval(updateVault, 5000);
+      setInterval(updateVault, 1000);
     });
   </script>
 </body>
