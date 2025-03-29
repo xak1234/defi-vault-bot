@@ -77,7 +77,7 @@
       document.getElementById('heaven').innerHTML=renderHoldings(heavenTokens,prices,holdings.heaven,START_HEAVEN,'heaven');
       saveHoldings();document.getElementById('timestamp').textContent=`Updated: ${new Date().toUTCString()}`;}catch(e){console.error(e);}}
 
-    loadHoldings();updateVault();setInterval(updateVault,30000);
+    loadHoldings();updateVault();setInterval(updateVault,50000);
   </script>
 </body>
 </html>
