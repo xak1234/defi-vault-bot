@@ -149,7 +149,7 @@
       const gainClass = gain >= 0 ? 'positive' : 'negative';
 
       return `
-        <div class="box">Total Value<br>£${total.toFixed(2)}</div>
+        <div class="box" style="font-size: 1.5em; font-weight: bold; background: #0d1a26;">Total Value<br>££${total.toFixed(2)}</div>
         ${html}
         <div class="gain ${gainClass}">Gain<br>£${gain.toFixed(2)} (${((gain / invested) * 100).toFixed(2)}%)</div>
       `;
@@ -210,15 +210,15 @@
         const allTokens = { ...stableTokens, ...heavenTokens };
         const prices = await fetchPrices(allTokens);
 
-        for (const [symbol, id] of Object.entries(stableTokens)) {
-          if (!holdings.stable[symbol]) {
+        if (Object.keys(holdings.stable).length === 0) {
+          for (const [symbol, id] of Object.entries(stableTokens)) {
             const qty = 5000 / Object.keys(stableTokens).length / prices[id].gbp;
             holdings.stable[symbol] = { quantity: qty, priceBought: prices[id].gbp };
           }
         }
 
-        for (const [symbol, id] of Object.entries(heavenTokens)) {
-          if (!holdings.heaven[symbol]) {
+        if (Object.keys(holdings.heaven).length === 0) {
+          for (const [symbol, id] of Object.entries(heavenTokens)) {
             const qty = 5000 / Object.keys(heavenTokens).length / prices[id].gbp;
             holdings.heaven[symbol] = { quantity: qty, priceBought: prices[id].gbp };
           }
