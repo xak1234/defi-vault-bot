@@ -75,6 +75,7 @@
     };
 
     let previousPrices = {};
+    let lastGoodPrices = {};
 
     async function fetchPrices(tokenMap) {
       const ids = [...new Set(Object.values(tokenMap))].join(',');
@@ -84,75 +85,73 @@
       return res.json();
     }
 
-    function updateBox(id, price) {
+    function updateBox(id, newPrice) {
       const el = document.getElementById(id);
+      if (!el) return;
+
       const prev = previousPrices[id];
 
       if (prev !== undefined) {
-        if (price > prev) {
-          el.classList.add("flash-up");
-        } else if (price < prev) {
-          el.classList.add("flash-down");
-        }
+        if (newPrice > prev) el.classList.add("flash-up");
+        else if (newPrice < prev) el.classList.add("flash-down");
 
         setTimeout(() => {
           el.classList.remove("flash-up", "flash-down");
         }, 1500);
       }
 
-      el.innerHTML = `£${price.toFixed(6)}`;
-      previousPrices[id] = price;
+      el.innerHTML = `£${newPrice.toFixed(6)}`;
+      previousPrices[id] = newPrice;
     }
 
-    function calculatePortfolio(tokens, prices, startAmount, prefix) {
+    function renderPortfolio(tokens, prices, startAmount, prefix) {
       const split = startAmount / Object.keys(tokens).length;
       let total = 0;
-      const tokenHTML = [];
+      let html = '';
 
       for (const [symbol, id] of Object.entries(tokens)) {
-        const price = prices[id]?.gbp ?? 1;
-        const qty = split / price;
+        const price = prices[id]?.gbp ?? previousPrices[`${prefix}-${symbol}`] ?? 0;
+        const qty = split / (price || 1);
         const value = qty * price;
         total += value;
 
         const boxId = `${prefix}-${symbol}`;
-        tokenHTML.push(`
+        html += `
           <div class="box">
             ${symbol} Price<br>
-            <div id="${boxId}">Loading...</div>
+            <div id="${boxId}">£${price ? price.toFixed(6) : '?.??????'}</div>
           </div>
-        `);
+        `;
 
-        setTimeout(() => updateBox(boxId, price), 0); // async visual
+        setTimeout(() => updateBox(boxId, price), 0);
       }
 
       const gain = total - startAmount;
       const gainClass = gain >= 0 ? 'positive' : 'negative';
+      html = `<div class="box">Total Value<br>£${total.toFixed(2)}</div>` + html;
+      html += `<div class="gain ${gainClass}">Gain<br>£${gain.toFixed(2)} (${((gain / startAmount) * 100).toFixed(2)}%)</div>`;
 
-      return `
-        <div class="box">Total Value<br>£${total.toFixed(2)}</div>
-        ${tokenHTML.join('')}
-        <div class="gain ${gainClass}">Gain<br>£${gain.toFixed(2)} (${((gain / startAmount) * 100).toFixed(2)}%)</div>
-      `;
+      return html;
     }
 
     async function updateVault() {
       try {
         const allTokens = { ...stableTokens, ...heavenTokens };
         const prices = await fetchPrices(allTokens);
+        lastGoodPrices = prices;
 
-        document.getElementById("stable").innerHTML = calculatePortfolio(stableTokens, prices, START_STABLE, "stable");
-        document.getElementById("heaven").innerHTML = calculatePortfolio(heavenTokens, prices, START_HEAVEN, "heaven");
-
+        document.getElementById("stable").innerHTML = renderPortfolio(stableTokens, prices, START_STABLE, "stable");
+        document.getElementById("heaven").innerHTML = renderPortfolio(heavenTokens, prices, START_HEAVEN, "heaven");
         document.getElementById("timestamp").textContent = "Last updated: " + new Date().toUTCString();
       } catch (err) {
-        document.getElementById("stable").innerHTML = "<p style='color:red;'>❌ Failed to load data.</p>";
-        document.getElementById("heaven").innerHTML = "";
-        console.error(err);
+        console.warn("❌ API failed. Using last good prices.");
+        document.getElementById("stable").innerHTML = renderPortfolio(stableTokens, lastGoodPrices, START_STABLE, "stable");
+        document.getElementById("heaven").innerHTML = renderPortfolio(heavenTokens, lastGoodPrices, START_HEAVEN, "heaven");
+        document.getElementById("timestamp").textContent = "Last updated: " + new Date().toUTCString() + " (cached)";
       }
     }
 
-    setInterval(updateVault, 300000); // Every 5 minutes
+    setInterval(updateVault, 100000); // Every 5 mins
     window.onload = updateVault;
   </script>
 </head>
