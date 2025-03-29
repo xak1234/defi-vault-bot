@@ -1,20 +1,8 @@
-<!-- ✂️ Only the edited/added parts shown for brevity -->
-
-<!-- Inside <body> -->
-<div class="section">
-  <div class="section-title">Heaven's Vault Portfolio</div>
-  <div id="heaven">Loading...</div>
-</div>
-
-<div class="section">
-  <div class="section-title">🏆 Winnings</div>
-  <div id="winnings">£0.00</div>
-</div>
-
 <script>
   const START_STABLE = 5000;
-  let startHeaven = 5000;
-  let winnings = 0;
+  let winnings = parseFloat(localStorage.getItem("winnings")) || 0;
+  let startHeaven = parseFloat(localStorage.getItem("startHeaven"));
+  if (isNaN(startHeaven)) startHeaven = 5000;
 
   const stableTokens = {
     'USDE': 'ethena-usde',
@@ -32,6 +20,15 @@
     'METH': 'mantle-staked-ether'
   };
 
+  const debugBox = document.createElement('div');
+  debugBox.style.fontSize = '12px';
+  debugBox.style.color = '#888';
+  debugBox.style.marginTop = '20px';
+  document.body.appendChild(debugBox);
+
+  let heavenHistory = [];
+  let stableHistory = [];
+
   async function fetchPrices(tokens) {
     const ids = Object.values(tokens).join(',');
     const url = `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=gbp`;
@@ -44,8 +41,7 @@
       return data;
     } catch (err) {
       console.error("❌ Fetch error:", err);
-      alert("Failed to load token prices from CoinGecko. Using fallback prices (£1.00).");
-      return {};
+      return null;
     }
   }
 
@@ -55,11 +51,15 @@
     const html = [];
 
     for (const [symbol, id] of Object.entries(tokens)) {
-      const price = prices[id]?.gbp ?? 1;
-      const qty = split / price;
-      const value = qty * price;
-      total += value;
-      html.push(`<div class="box">${symbol} Price<br>£${price.toFixed(6)}</div>`);
+      const price = prices && prices[id]?.gbp;
+      if (price) {
+        const qty = split / price;
+        const value = qty * price;
+        total += value;
+        html.push(`<div class="box">${symbol} Price<br>£${price.toFixed(6)}</div>`);
+      } else {
+        html.push(`<div class="box">${symbol} Price<br>Unavailable</div>`);
+      }
     }
 
     const gain = total - start;
@@ -75,23 +75,92 @@
     };
   }
 
-  async function updateVault() {
-    const stablePrices = await fetchPrices(stableTokens);
-    const heavenPrices = await fetchPrices(heavenTokens);
-
-    const stableData = calculate(stableTokens, stablePrices, START_STABLE, "Stablecoin");
-    const heavenData = calculate(heavenTokens, heavenPrices, startHeaven, "Heaven");
-
-    // Auto-move profits if Heaven's Vault gain >= £50
-    if (heavenData.gain >= 50) {
-      winnings += heavenData.gain;
-      startHeaven = heavenData.total; // reset baseline to current
+  function updateChart(chart, label, data) {
+    chart.data.labels.push(label);
+    chart.data.datasets[0].data.push(data);
+    if (chart.data.labels.length > 20) {
+      chart.data.labels.shift();
+      chart.data.datasets[0].data.shift();
     }
+    chart.update();
+  }
 
-    document.getElementById("stable").innerHTML = stableData.html;
-    document.getElementById("heaven").innerHTML = heavenData.html;
-    document.getElementById("winnings").innerHTML = `£${winnings.toFixed(2)}`;
-    document.getElementById("timestamp").textContent = "Last updated: " + new Date().toUTCString();
+  let heavenChart = new Chart(document.getElementById('heavenChart').getContext('2d'), {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [{
+        label: "Heaven's Vault (£)",
+        borderColor: '#ff00ff',
+        data: []
+      }]
+    },
+    options: {
+      plugins: { legend: { labels: { color: '#00ffff' } } },
+      scales: {
+        x: { ticks: { color: '#888' } },
+        y: { ticks: { color: '#888' } }
+      }
+    }
+  });
+
+  let stableChart = new Chart(document.getElementById('stableChart').getContext('2d'), {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [{
+        label: "Stablecoin Vault (£)",
+        borderColor: '#00ffcc',
+        data: []
+      }]
+    },
+    options: {
+      plugins: { legend: { labels: { color: '#00ffff' } } },
+      scales: {
+        x: { ticks: { color: '#888' } },
+        y: { ticks: { color: '#888' } }
+      }
+    }
+  });
+
+  async function updateVault() {
+    try {
+      const stablePrices = await fetchPrices(stableTokens);
+      const heavenPrices = await fetchPrices(heavenTokens);
+
+      const stableData = calculate(stableTokens, stablePrices, START_STABLE, "Stablecoin");
+      const heavenData = calculate(heavenTokens, heavenPrices, startHeaven, "Heaven");
+
+      if (heavenData.gain >= 50) {
+        winnings += heavenData.gain;
+        startHeaven = heavenData.total;
+        localStorage.setItem("winnings", winnings.toFixed(2));
+        localStorage.setItem("startHeaven", heavenData.total.toFixed(2));
+        console.log(`🎉 Winnings triggered: +£${heavenData.gain.toFixed(2)}`);
+      }
+
+      document.getElementById("stable").innerHTML = stableData.html;
+      document.getElementById("heaven").innerHTML = heavenData.html;
+      document.getElementById("winnings").innerHTML = `£${winnings.toFixed(2)}`;
+      document.getElementById("timestamp").textContent = "Last updated: " + new Date().toUTCString();
+
+      updateChart(heavenChart, new Date().toLocaleTimeString(), heavenData.total);
+      updateChart(stableChart, new Date().toLocaleTimeString(), stableData.total);
+
+      debugBox.innerText = '✅ Prices loaded and vaults updated successfully.';
+    } catch (e) {
+      console.error('🔥 updateVault() error:', e);
+      debugBox.innerText = '⚠️ Failed to load data. Try again later.';
+      document.getElementById("heaven").innerHTML = '<div class="box">Failed to load Heaven’s Vault data.</div>';
+    }
+  }
+
+  function resetWinnings() {
+    winnings = 0;
+    startHeaven = 5000;
+    localStorage.removeItem("winnings");
+    localStorage.removeItem("startHeaven");
+    updateVault();
   }
 
   document.addEventListener('DOMContentLoaded', () => {
