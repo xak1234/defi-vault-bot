@@ -46,8 +46,22 @@
       color: #ff4444;
     }
   </style>
+<style>
+  .toilet-flush {
+    display: none;
+    text-align: center;
+    font-size: 40px;
+    margin-bottom: 20px;
+    animation: flush 1s infinite alternate;
+  }
+  @keyframes flush {
+    0% { transform: translateY(0); }
+    100% { transform: translateY(5px); }
+  }
+</style>
 </head>
 <body>
+  <div id="toilet" class="toilet-flush">🚽 Flushing losses...</div>
   <h1>💼 Daddy's Live DeFi Vault</h1>
   <div class="timestamp" id="timestamp">Loading...</div>
 
@@ -144,19 +158,46 @@
     }
 
     async function updateVault() {
-      try {
-        const stablePrices = await fetchPrices(stableTokens);
-        const heavenPrices = await fetchPrices(heavenTokens);
+  try {
+    const stablePrices = await fetchPrices(stableTokens);
+    const heavenPrices = await fetchPrices(heavenTokens);
 
-        const stableData = calculate(stableTokens, stablePrices, START_STABLE, "Stablecoin");
-        const heavenData = calculate(heavenTokens, heavenPrices, startHeaven, "Heaven");
+    if (!stablePrices || !heavenPrices) {
+      debugBox.innerText = '⚠️ Failed to fetch prices. Retaining previous values.';
+      return;
+    }
 
-        if (heavenData.gain >= 50) {
-          winnings += heavenData.gain;
-          startHeaven = heavenData.total;
-          localStorage.setItem("winnings", winnings.toFixed(2));
-          localStorage.setItem("startHeaven", heavenData.total.toFixed(2));
-          console.log(`🎉 Winnings triggered: +£${heavenData.gain.toFixed(2)}`);
+    const stableData = calculate(stableTokens, stablePrices, START_STABLE, "Stablecoin");
+    const heavenData = calculate(heavenTokens, heavenPrices, startHeaven, "Heaven");
+
+    if (heavenData.gain >= 50) {
+      winnings += heavenData.gain;
+      startHeaven = heavenData.total;
+      localStorage.setItem("winnings", winnings.toFixed(2));
+      localStorage.setItem("startHeaven", heavenData.total.toFixed(2));
+      console.log(`🎉 Winnings triggered: +£${heavenData.gain.toFixed(2)}`);
+    }
+
+    document.getElementById("stable").innerHTML = stableData.html;
+    document.getElementById("heaven").innerHTML = heavenData.html;
+    document.getElementById("winnings").innerHTML = `£${winnings.toFixed(2)}`;
+    document.getElementById("timestamp").textContent = "Last updated: " + new Date().toUTCString();
+
+    // Show toilet animation if either vault is negative
+    const toilet = document.getElementById("toilet");
+    if (stableData.gain < 0 || heavenData.gain < 0) {
+      toilet.style.display = 'block';
+    } else {
+      toilet.style.display = 'none';
+    }
+
+    debugBox.innerText = '✅ Prices loaded and vaults updated successfully.';
+  } catch (e) {
+    console.error('🔥 updateVault() error:', e);
+    debugBox.innerText = '⚠️ Failed to load data. Try again later.';
+    document.getElementById("heaven").innerHTML = '<div class="box">Failed to load Heaven’s Vault data.</div>';
+  }
+}`);
         }
 
         document.getElementById("stable").innerHTML = stableData.html;
