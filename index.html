@@ -3,6 +3,7 @@
 <head>
   <title>💼 Daddy's Real DeFi Vault</title>
   <meta charset="UTF-8">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     body {
       background: #0d0d0d;
@@ -48,6 +49,9 @@
     .flash-down {
       background-color: #330000 !important;
     }
+    #chartContainer {
+      margin-top: 50px;
+    }
   </style>
 </head>
 <body>
@@ -62,6 +66,11 @@
   <div class="section">
     <div class="section-title">Heaven's Vault Portfolio</div>
     <div id="heaven">Loading...</div>
+  </div>
+
+  <div id="chartContainer">
+    <div class="section-title">Combined Portfolio Performance</div>
+    <canvas id="vaultChart" width="400" height="150"></canvas>
   </div>
 
   <script>
@@ -83,6 +92,9 @@
 
     let previousPrices = {};
     let holdings = { stable: {}, heaven: {} };
+    let performanceHistory = [];
+
+    let chart;
 
     function saveHoldings() {
       localStorage.setItem('daddyVaultHoldings', JSON.stringify(holdings));
@@ -121,13 +133,10 @@
 
       for (const [symbol, id] of Object.entries(tokens)) {
         const price = prices[id]?.gbp ?? previousPrices[`${prefix}-${symbol}`] ?? 0;
-
         if (!store[symbol]) continue;
-
         const qty = store[symbol].quantity;
         const value = qty * price;
         total += value;
-
         const boxId = `${prefix}-${symbol}`;
         html += `
           <div class="box">
@@ -135,7 +144,6 @@
             <div id="${boxId}">£${price.toFixed(6)}</div>
           </div>
         `;
-
         setTimeout(() => updateBox(boxId, price), 0);
       }
 
@@ -150,12 +158,46 @@
       `;
     }
 
+    function updateChart() {
+      const labels = performanceHistory.map(p => p.time);
+      const data = performanceHistory.map(p => p.total);
+
+      if (!chart) {
+        const ctx = document.getElementById('vaultChart').getContext('2d');
+        chart = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: labels,
+            datasets: [{
+              label: 'Total Vault Value',
+              data: data,
+              borderColor: '#00ffcc',
+              backgroundColor: 'rgba(0,255,204,0.1)',
+              tension: 0.2
+            }]
+          },
+          options: {
+            scales: {
+              x: { display: false },
+              y: { beginAtZero: false }
+            },
+            plugins: {
+              legend: { labels: { color: '#00ffcc' } }
+            }
+          }
+        });
+      } else {
+        chart.data.labels = labels;
+        chart.data.datasets[0].data = data;
+        chart.update();
+      }
+    }
+
     async function updateVault() {
       try {
         const allTokens = { ...stableTokens, ...heavenTokens };
         const prices = await fetchPrices(allTokens);
 
-        // Init if not set
         for (const [symbol, id] of Object.entries(stableTokens)) {
           if (!holdings.stable[symbol]) {
             const qty = 5000 / Object.keys(stableTokens).length / prices[id].gbp;
@@ -174,7 +216,29 @@
 
         document.getElementById("stable").innerHTML = calculateValue(stableTokens, prices, holdings.stable, 'stable');
         document.getElementById("heaven").innerHTML = calculateValue(heavenTokens, prices, holdings.heaven, 'heaven');
-        document.getElementById("timestamp").textContent = "Last updated: " + new Date().toUTCString();
+
+        const stableValue = Object.entries(stableTokens).reduce((sum, [symbol, id]) => {
+          const qty = holdings.stable[symbol]?.quantity || 0;
+          const price = prices[id]?.gbp || 0;
+          return sum + (qty * price);
+        }, 0);
+
+        const heavenValue = Object.entries(heavenTokens).reduce((sum, [symbol, id]) => {
+          const qty = holdings.heaven[symbol]?.quantity || 0;
+          const price = prices[id]?.gbp || 0;
+          return sum + (qty * price);
+        }, 0);
+
+        const now = new Date();
+        performanceHistory.push({
+          time: now.toLocaleTimeString(),
+          total: +(stableValue + heavenValue).toFixed(2)
+        });
+        if (performanceHistory.length > 30) performanceHistory.shift();
+        updateChart();
+
+        document.getElementById("timestamp").textContent = "Last updated: " + now.toUTCString();
+
       } catch (e) {
         console.error(e);
         document.getElementById("timestamp").textContent = "Last update failed: " + new Date().toUTCString();
