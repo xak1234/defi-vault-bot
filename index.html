@@ -1,9 +1,10 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>💼 Daddy's Real DeFi Vault</title>
   <meta charset="UTF-8">
+  <title>💼 Daddy's Real DeFi Vault</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/moment@2.29.4"></script>
   <style>
     body {
       background: #0d0d0d;
@@ -55,83 +56,4 @@
   </style>
 </head>
 <body>
-  <h1>💼 Daddy's Real DeFi Vault</h1>
-  <div class="timestamp" id="timestamp">Loading...</div>
-
-  <div class="section">
-    <div class="section-title">Stablecoin Portfolio</div>
-    <div id="stable">Loading...</div>
-
-  <div class="section">
-    <div class="section-title">Heaven's Vault Portfolio</div>
-    <div id="heaven">Loading...</div>
-  </div>
-
-  <div id="chartContainer">
-  <div class="section-title">Combined Portfolio Performance</div>
-  <canvas id="vaultChart" width="600" height="100"></canvas>
-</div>
-    
-  </div>
-
-  <script>
-    const stableTokens = {
-      'USDE': 'ethena-usde',
-      'RAI': 'rai',
-      'FRAX': 'frax',
-      'ALUSD': 'alchemix-usd',
-      'LUSD': 'liquity-usd'
-    };
-
-    const heavenTokens = {
-      'ETHENA': 'ethena-usde',
-      'PENDLE': 'pendle',
-      'GMX': 'gmx',
-      'LIT': 'litentry',
-      'METH': 'mantle-staked-ether'
-    };
-
-    let previousPrices = {};
-    let holdings = { stable: {}, heaven: {} };
-    let performanceHistory = [];
-    let chart;
-let stableChart;
-let heavenChart;
-
-    function saveHoldings() {
-  const snapshot = {
-    holdings,
-    timestamp: new Date().toISOString(),
-    history: performanceHistory
-  };
-  localStorage.setItem('daddyVaultHoldings', JSON.stringify(snapshot));
-}
-
-    function loadHoldings() {
-  const saved = localStorage.getItem('daddyVaultHoldings');
-  if (saved) {
-    const parsed = JSON.parse(saved);
-    holdings = parsed.holdings || holdings;
-    performanceHistory = parsed.history || [];
-  }
-}
-
-    async function fetchPrices(tokens) {
-  const ids = [...new Set(Object.values(tokens))].join(',');
-  const url = `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=gbp`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error('Price fetch failed');
-  return await res.json();
-}
-  </script>
-<div class="section">
-  <div class="section-title">Stablecoin Performance</div>
-  <canvas id="stableChart" width="600" height="100"></canvas>
-</div>
-
-<div class="section">
-  <div class="section-title">Heaven's Vault Performance</div>
-  <canvas id="heavenChart" width="600" height="100"></canvas>
-</div>
-</body>
-</html>
+  <h1>
