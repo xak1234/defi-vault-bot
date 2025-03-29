@@ -109,8 +109,38 @@
     document.body.appendChild(debugBox);
 
     async function fetchPrices(tokens) {
-      const ids = Object.values(tokens).join(',');
-      const url = `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=gbp`;
+  const priceMap = {
+    'ethena-usde': 'USDTGBP',
+    'rai': 'RAIUSDT',
+    'frax': 'FRAXUSDT',
+    'alchemix-usd': 'ALCXUSDT',
+    'liquity-usd': 'LQTYUSDT',
+    'pendle': 'PENDLEUSDT',
+    'gmx': 'GMXUSDT',
+    'litentry': 'LITUSDT',
+    'mantle-staked-ether': 'MNTUSDT'
+  };
+
+  let prices = {};
+
+  try {
+    for (const [key, symbol] of Object.entries(tokens)) {
+      const binanceSymbol = priceMap[symbol];
+      if (!binanceSymbol) continue;
+
+      const res = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${binanceSymbol}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      const data = await res.json();
+      prices[symbol] = { gbp: parseFloat(data.price) };
+    }
+
+    return prices;
+  } catch (err) {
+    console.error("❌ Binance fetch error:", err);
+    return null;
+  }
+}&vs_currencies=gbp`;
 
       try {
         const res = await fetch(url);
@@ -150,27 +180,34 @@
       const stablePrices = await fetchPrices(stableTokens);
       const heavenPrices = await fetchPrices(heavenTokens);
 
-      if (!stablePrices || !heavenPrices) {
-        debugBox.innerText = '⚠️ Failed to fetch prices. Retaining previous values.';
-        return;
+      let stableData, heavenData;
+
+      if (stablePrices) {
+        stableData = calculate(stableTokens, stablePrices, START_STABLE);
+        document.getElementById("stable").innerHTML = stableData.html;
+      } else {
+        debugBox.innerText = '⚠️ Stablecoin prices failed to update. Retaining previous values.';
       }
 
-      const stableData = calculate(stableTokens, stablePrices, START_STABLE);
-      const heavenData = calculate(heavenTokens, heavenPrices, startHeaven);
+      if (heavenPrices) {
+        heavenData = calculate(heavenTokens, heavenPrices, startHeaven);
+        document.getElementById("heaven").innerHTML = heavenData.html;
+      } else {
+        debugBox.innerText += ' ⚠️ Heaven portfolio prices failed to update. Retaining previous values.';
+      }
 
-      if (heavenData.gain >= 50) {
+      if (heavenData && heavenData.gain >= 50) {
         winnings += heavenData.gain;
         startHeaven += heavenData.gain;
         localStorage.setItem("winnings", winnings.toFixed(2));
         localStorage.setItem("startHeaven", startHeaven.toFixed(2));
       }
 
-      document.getElementById("stable").innerHTML = stableData.html;
-      document.getElementById("heaven").innerHTML = heavenData.html;
       document.getElementById("winnings").innerHTML = `£${winnings.toFixed(2)}`;
       document.getElementById("timestamp").textContent = "Last updated: " + new Date().toUTCString();
 
-      document.getElementById("toilet").style.display = (stableData.gain < 0 || heavenData.gain < 0) ? 'block' : 'none';
+      const negativeGain = (stableData && stableData.gain < 0) || (heavenData && heavenData.gain < 0);
+      document.getElementById("toilet").style.display = negativeGain ? 'block' : 'none';
     }
 
     function resetWinnings() {
